@@ -153,3 +153,4 @@ scripts/
 - Reglas Firestore por roles (`coach`, `analyst`)
 # padel-stadistic
 # padel-stadistic
+# padel-stadistic
