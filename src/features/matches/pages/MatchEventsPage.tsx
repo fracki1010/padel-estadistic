@@ -11,7 +11,7 @@ import type { CourtZone, EventType, ShotType, ZoneType } from '@/features/matche
 import type { MatchTeam } from '@/features/matches/types/match';
 
 type TeamSide = MatchTeam;
-type GuidedStep = 'player' | 'result' | 'action' | 'zone' | 'target';
+type GuidedStep = 'player' | 'result' | 'action' | 'zone' | 'tozone' | 'target';
 type GuidedOutcome = 'won' | 'lost';
 type ScoreSlide = 'sets' | 'game' | 'games';
 
@@ -91,6 +91,7 @@ export const MatchEventsPage = () => {
   const [guidedOutcome, setGuidedOutcome] = useState<GuidedOutcome>('won');
   const [pendingAction, setPendingAction] = useState<QuickAction | null>(null);
   const [courtZone, setCourtZone] = useState<CourtZone | null>(null);
+  const [toZone, setToZone] = useState<CourtZone | null>(null);
   const [scoreSlide, setScoreSlide] = useState<ScoreSlide>('game');
 
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -100,6 +101,10 @@ export const MatchEventsPage = () => {
   const [notifiedGameKey, setNotifiedGameKey] = useState<string | null>(null);
 
   const playerMap = new Map((players ?? []).map((player) => [player.id, `${player.firstName} ${player.lastName}`]));
+  const abbr = (pid: string) => (playerMap.get(pid)?.split(' ')[0] ?? '?').slice(0, 3).toUpperCase();
+  const scoreLabel = match
+    ? `${match.teamA.map(abbr).join('/')} - ${match.teamB.map(abbr).join('/')}`
+    : 'A - B';
 
   const playersInMatch = useMemo(() => {
     if (!match) return [];
@@ -225,6 +230,7 @@ export const MatchEventsPage = () => {
     setGuidedStep('player');
     setPendingAction(null);
     setCourtZone(null);
+    setToZone(null);
   };
 
   useEffect(() => {
@@ -322,6 +328,7 @@ export const MatchEventsPage = () => {
         shotType: action.shotType,
         zone: action.zone,
         courtZone: courtZone ?? undefined,
+        toZone: toZone ?? undefined,
         targetPlayerId,
         notes: ''
       });
@@ -348,6 +355,7 @@ export const MatchEventsPage = () => {
       setGuidedOutcome('won');
       setPendingAction(null);
       setCourtZone(null);
+      setToZone(null);
 
       if (cycleTimeoutRef.current !== null) {
         window.clearTimeout(cycleTimeoutRef.current);
@@ -441,19 +449,19 @@ export const MatchEventsPage = () => {
                   <div className="w-1/3 p-2.5 text-center">
                     <p className="text-xs text-slate-400">Sets</p>
                     <p className="text-2xl font-semibold text-slate-100">{setsWonTeamA} - {setsWonTeamB}</p>
-                    <p className="text-xs text-slate-400">A - B</p>
+                    <p className="text-[10px] text-slate-400">{scoreLabel}</p>
                   </div>
                   <div className="w-1/3 p-2.5 text-center">
                     <p className="text-xs text-slate-400">Juego actual</p>
                     <p className="text-2xl font-semibold text-slate-100">
                       {isTieBreak ? `${currentGamePointsA} - ${currentGamePointsB}` : `${padelPoints.a} - ${padelPoints.b}`}
                     </p>
-                    <p className="text-xs text-slate-400">A - B</p>
+                    <p className="text-[10px] text-slate-400">{scoreLabel}</p>
                   </div>
                   <div className="w-1/3 p-2.5 text-center">
                     <p className="text-xs text-slate-400">Games del set</p>
                     <p className="text-2xl font-semibold text-slate-100">{gamesInSetA} - {gamesInSetB}</p>
-                    <p className="text-xs text-slate-400">A - B</p>
+                    <p className="text-[10px] text-slate-400">{scoreLabel}</p>
                   </div>
                 </div>
               </div>
@@ -508,8 +516,9 @@ export const MatchEventsPage = () => {
                 {guidedStep === 'player'  ? '1) Selecciona jugador'
                   : guidedStep === 'result' ? `2) ${selectedPlayerName ?? '-'}: ¿ganó o perdió?`
                   : guidedStep === 'action' ? `3) Acción de ${selectedPlayerName ?? '-'}`
-                  : guidedStep === 'zone'   ? `4) ¿Desde dónde? (${pendingAction?.label ?? '-'})`
-                  :                          `5) ¿A quién iba dirigido?`}
+                  : guidedStep === 'zone'   ? `4) ¿Desde dónde?`
+                  : guidedStep === 'tozone' ? `5) ¿A qué zona fue?`
+                  :                          `6) ¿A quién iba dirigido?`}
               </p>
               {recentFeedback ? <p className="mt-1 text-xs text-brand-300">Último: {recentFeedback}</p> : null}
               {saveError ? <p className="mt-1 text-xs text-red-300">{saveError}</p> : null}
@@ -536,6 +545,11 @@ export const MatchEventsPage = () => {
                   >
                     <p className="break-words font-semibold text-slate-100">{player.firstName} {player.lastName}</p>
                     <p className="text-xs text-slate-400">{teamByPlayer.get(player.id) === 'equipoA' ? 'Equipo A' : 'Equipo B'}</p>
+                    {player.preferredSide !== 'indistinto' && (
+                      <p className={`mt-0.5 text-xs font-medium ${player.preferredSide === 'drive' ? 'text-sky-400' : 'text-violet-400'}`}>
+                        {player.preferredSide === 'drive' ? 'Drive' : 'Revés'}
+                      </p>
+                    )}
                   </button>
                 ))}
               </div>
@@ -629,17 +643,18 @@ export const MatchEventsPage = () => {
               </p>
               <div className="flex-1 min-h-0 flex items-center justify-center px-2">
                 <CourtZonePicker
+                  flip
                   selected={courtZone}
                   onSelect={(z) => {
                     setCourtZone(z);
-                    setGuidedStep('target');
+                    setGuidedStep('tozone');
                   }}
                 />
               </div>
               <Button
                 variant="secondary"
                 className="w-full"
-                onClick={() => { setCourtZone(null); setGuidedStep('target'); }}
+                onClick={() => { setCourtZone(null); setGuidedStep('tozone'); }}
               >
                 Omitir (sin zona)
               </Button>
@@ -649,10 +664,37 @@ export const MatchEventsPage = () => {
             </div>
           ) : null}
 
+          {guidedStep === 'tozone' ? (
+            <div className="flex h-full w-full min-h-0 flex-col gap-2">
+              <p className="text-center text-base font-semibold text-slate-100">
+                Paso 5: ¿A qué zona fue? <span className="text-sm font-normal text-slate-400">(cancha rival)</span>
+              </p>
+              <div className="flex-1 min-h-0 flex items-center justify-center px-2">
+                <CourtZonePicker
+                  selected={toZone}
+                  onSelect={(z) => {
+                    setToZone(z);
+                    setGuidedStep('target');
+                  }}
+                />
+              </div>
+              <Button
+                variant="secondary"
+                className="w-full"
+                onClick={() => { setToZone(null); setGuidedStep('target'); }}
+              >
+                Omitir (sin destino)
+              </Button>
+              <Button variant="secondary" className="w-full" onClick={() => setGuidedStep('zone')}>
+                Volver a origen
+              </Button>
+            </div>
+          ) : null}
+
           {guidedStep === 'target' ? (
             <div className="flex h-full w-full min-h-0 flex-col gap-2">
               <p className="text-center text-base font-semibold text-slate-100">
-                Paso 5: ¿A quién iba dirigido?
+                Paso 6: ¿A quién iba dirigido?
               </p>
               <div className="grid min-h-0 flex-1 auto-rows-fr grid-cols-2 gap-2">
                 {playersInMatch
@@ -680,8 +722,8 @@ export const MatchEventsPage = () => {
               >
                 Omitir (sin target)
               </Button>
-              <Button variant="secondary" className="w-full" onClick={() => setGuidedStep('zone')}>
-                Volver a zona
+              <Button variant="secondary" className="w-full" onClick={() => setGuidedStep('tozone')}>
+                Volver a destino
               </Button>
             </div>
           ) : null}

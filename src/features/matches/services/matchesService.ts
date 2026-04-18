@@ -61,6 +61,7 @@ const mapMatchEvent = (id: string, data: Record<string, unknown>): MatchEvent =>
   shotType: (data.shotType as MatchEvent['shotType']) ?? 'drive',
   zone: (data.zone as MatchEvent['zone']) ?? null,
   courtZone: data.courtZone ? (data.courtZone as MatchEvent['courtZone']) : undefined,
+  toZone: data.toZone ? (data.toZone as MatchEvent['toZone']) : undefined,
   targetPlayerId: data.targetPlayerId ? String(data.targetPlayerId) : undefined,
   notes: data.notes ? String(data.notes) : '',
   createdAt: toISOString(data.createdAt as string)
