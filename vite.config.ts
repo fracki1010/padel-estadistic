@@ -8,11 +8,12 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icons/icon.svg', 'icons/icon-maskable.svg'],
+      includeAssets: ['icons/favicon-32.png', 'icons/apple-touch-icon.png', 'icons/icon.svg', 'icons/icon-maskable.svg'],
       manifest: {
         name: 'Padel Estadistic',
         short_name: 'PadelStats',
         description: 'Carga y análisis de estadísticas de pádel en tiempo real',
+        id: '/',
         theme_color: '#020617',
         background_color: '#020617',
         display: 'standalone',
@@ -21,15 +22,21 @@ export default defineConfig({
         start_url: '/',
         icons: [
           {
-            src: '/icons/icon.svg',
-            sizes: 'any',
-            type: 'image/svg+xml',
+            src: '/icons/icon-192.png',
+            sizes: '192x192',
+            type: 'image/png',
             purpose: 'any'
           },
           {
-            src: '/icons/icon-maskable.svg',
-            sizes: 'any',
-            type: 'image/svg+xml',
+            src: '/icons/icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any'
+          },
+          {
+            src: '/icons/icon-maskable-512.png',
+            sizes: '512x512',
+            type: 'image/png',
             purpose: 'maskable'
           }
         ]
