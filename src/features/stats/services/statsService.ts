@@ -1,7 +1,23 @@
 import type { Match } from '@/features/matches/types/match';
-import type { MatchEvent } from '@/features/matches/types/matchEvent';
+import type { EventType, MatchEvent } from '@/features/matches/types/matchEvent';
 import type { Player } from '@/features/players/types/player';
 import type { DashboardStats, MatchStats, PlayerStats, Rankings } from '@/features/stats/types/stats';
+
+// Todos los tipos de evento que cuentan como golpe ganador en estadísticas.
+// ace se contabiliza por separado; doble_falta/errores no cuentan como winners.
+const WINNING_EVENT_TYPES = new Set<EventType>([
+  'winner',
+  'bandeja_ganadora',
+  'vibora_ganadora',
+  'globo_ganador',
+  'passing_shot',
+  'x3_ganador',
+  'x4_ganador',
+  'recuperacion_defensiva',
+  'punto_largo_ganado'
+]);
+
+const isWinner = (event: MatchEvent) => WINNING_EVENT_TYPES.has(event.eventType);
 
 const eventCounter = (events: MatchEvent[], predicate: (event: MatchEvent) => boolean) =>
   events.reduce((acc, event) => (predicate(event) ? acc + 1 : acc), 0);
@@ -31,13 +47,21 @@ export const getPlayerStats = (events: MatchEvent[], matches: Match[], playerId:
 
   const matchesPlayed = playerMatches.length;
   const matchesLost = Math.max(matchesPlayed - matchesWon, 0);
-  const winners = eventCounter(playerEvents, (event) => event.eventType === 'winner');
-  const unforcedErrors = eventCounter(playerEvents, (event) => event.eventType === 'error_no_forzado');
-  const forcedErrors = eventCounter(playerEvents, (event) => event.eventType === 'error_forzado');
-  const aces = eventCounter(playerEvents, (event) => event.eventType === 'ace');
-  const doubleFaults = eventCounter(playerEvents, (event) => event.eventType === 'doble_falta');
-  const netWinners = eventCounter(playerEvents, (event) => event.eventType === 'winner' && event.zone === 'red');
-  const baselineWinners = eventCounter(playerEvents, (event) => event.eventType === 'winner' && event.zone === 'fondo');
+  const winners = eventCounter(playerEvents, isWinner);
+  const unforcedErrors = eventCounter(playerEvents, (e) => e.eventType === 'error_no_forzado');
+  const forcedErrors = eventCounter(playerEvents, (e) => e.eventType === 'error_forzado');
+  const aces = eventCounter(playerEvents, (e) => e.eventType === 'ace');
+  const doubleFaults = eventCounter(playerEvents, (e) => e.eventType === 'doble_falta');
+  const doubleTouches = eventCounter(playerEvents, (e) => e.eventType === 'doble_toque');
+  const netWinners = eventCounter(playerEvents, (e) => isWinner(e) && e.zone === 'red');
+  const baselineWinners = eventCounter(playerEvents, (e) => isWinner(e) && e.zone === 'fondo');
+  const bandejas = eventCounter(playerEvents, (e) => e.eventType === 'bandeja_ganadora');
+  const viboras = eventCounter(playerEvents, (e) => e.eventType === 'vibora_ganadora');
+  const globos = eventCounter(playerEvents, (e) => e.eventType === 'globo_ganador');
+  const passingShotsWon = eventCounter(playerEvents, (e) => e.eventType === 'passing_shot');
+  const x3Winners = eventCounter(playerEvents, (e) => e.eventType === 'x3_ganador');
+  const x4Winners = eventCounter(playerEvents, (e) => e.eventType === 'x4_ganador');
+  const recuperaciones = eventCounter(playerEvents, (e) => e.eventType === 'recuperacion_defensiva');
   const totalEvents = playerEvents.length;
 
   return {
@@ -48,46 +72,99 @@ export const getPlayerStats = (events: MatchEvent[], matches: Match[], playerId:
     winRate: matchesPlayed ? (matchesWon / matchesPlayed) * 100 : 0,
     totalEvents,
     winners,
-    unforcedErrors,
-    forcedErrors,
-    aces,
-    doubleFaults,
     netWinners,
     baselineWinners,
+    bandejas,
+    viboras,
+    globos,
+    passingShotsWon,
+    x3Winners,
+    x4Winners,
+    recuperaciones,
+    aces,
+    doubleFaults,
+    unforcedErrors,
+    forcedErrors,
+    doubleTouches,
     winnersRate: totalEvents ? (winners / totalEvents) * 100 : 0,
     unforcedErrorRate: totalEvents ? (unforcedErrors / totalEvents) * 100 : 0,
     winnersMinusUnforcedErrors: winners - unforcedErrors
   };
 };
 
+const buildTeamStats = (events: MatchEvent[], team: 'equipoA' | 'equipoB') => {
+  const teamEvents = events.filter((e) => {
+    const isTeamPlayer = team === 'equipoA'
+      ? ['teamA_p1', 'teamA_p2'].includes(e.playerId) // se filtra por winningTeam abajo
+      : false;
+    return isTeamPlayer;
+  });
+  // Usamos winningTeam para errores propios y players del equipo para winners
+  const byWinningTeam = events.filter((e) => e.winningTeam === team);
+  const byLosingTeam = events.filter((e) => e.winningTeam !== team);
+
+  const winners = byWinningTeam.filter(isWinner).length;
+  const aces = events.filter((e) => e.eventType === 'ace' && e.winningTeam === team).length;
+  // errores propios: el punto se lo lleva el equipo contrario, y el evento es del jugador de este equipo
+  // En el sistema actual, los errores se registran en el jugador que erró, con winningTeam = equipo contrario
+  const unforcedErrors = byLosingTeam.filter((e) => e.eventType === 'error_no_forzado').length;
+  const forcedErrors = byLosingTeam.filter((e) => e.eventType === 'error_forzado').length;
+  const doubleFaults = byLosingTeam.filter((e) => e.eventType === 'doble_falta').length;
+
+  void teamEvents; // no usado directamente
+  return { winners, aces, doubleFaults, unforcedErrors, forcedErrors, balance: winners - unforcedErrors };
+};
+
 export const getMatchStats = (events: MatchEvent[], match: Match): MatchStats => {
-  const matchEvents = events.filter((event) => event.matchId === match.id);
+  const matchEvents = events.filter((e) => e.matchId === match.id);
 
-  const winnersByPlayer = matchEvents.reduce<Record<string, number>>((acc, event) => {
-    if (event.eventType === 'winner') acc[event.playerId] = (acc[event.playerId] || 0) + 1;
+  const winnersByPlayer = matchEvents.reduce<Record<string, number>>((acc, e) => {
+    if (isWinner(e)) acc[e.playerId] = (acc[e.playerId] || 0) + 1;
     return acc;
   }, {});
 
-  const errorsByPlayer = matchEvents.reduce<Record<string, number>>((acc, event) => {
-    if (event.eventType === 'error_no_forzado') acc[event.playerId] = (acc[event.playerId] || 0) + 1;
+  const errorsByPlayer = matchEvents.reduce<Record<string, number>>((acc, e) => {
+    if (e.eventType === 'error_no_forzado') acc[e.playerId] = (acc[e.playerId] || 0) + 1;
     return acc;
   }, {});
 
-  const teamAWinners = matchEvents.filter(
-    (event) => event.eventType === 'winner' && event.winningTeam === 'equipoA'
-  ).length;
-  const teamBWinners = matchEvents.filter(
-    (event) => event.eventType === 'winner' && event.winningTeam === 'equipoB'
-  ).length;
+  const targetedByPlayer = matchEvents.reduce<Record<string, number>>((acc, e) => {
+    if (e.targetPlayerId) acc[e.targetPlayerId] = (acc[e.targetPlayerId] || 0) + 1;
+    return acc;
+  }, {});
+
+  const teamAWinners = matchEvents.filter((e) => isWinner(e) && e.winningTeam === 'equipoA').length;
+  const teamBWinners = matchEvents.filter((e) => isWinner(e) && e.winningTeam === 'equipoB').length;
+
+  const teamAEvents = matchEvents.filter((e) => match.teamA.includes(e.playerId));
+  const teamBEvents = matchEvents.filter((e) => match.teamB.includes(e.playerId));
+
+  const buildTeam = (ownEvents: MatchEvent[], ownSide: 'equipoA' | 'equipoB'): import('@/features/stats/types/stats').TeamStats => {
+    const rivalSide = ownSide === 'equipoA' ? 'equipoB' : 'equipoA';
+    return {
+      winners: matchEvents.filter((e) => isWinner(e) && e.winningTeam === ownSide).length,
+      aces: ownEvents.filter((e) => e.eventType === 'ace').length,
+      doubleFaults: ownEvents.filter((e) => e.eventType === 'doble_falta').length,
+      unforcedErrors: ownEvents.filter((e) => e.eventType === 'error_no_forzado').length,
+      forcedErrors: ownEvents.filter((e) => e.eventType === 'error_forzado').length,
+      balance: matchEvents.filter((e) => isWinner(e) && e.winningTeam === ownSide).length
+              - ownEvents.filter((e) => e.eventType === 'error_no_forzado').length,
+    };
+    void rivalSide;
+  };
 
   return {
     totalEvents: matchEvents.length,
     winnersByPlayer,
     errorsByPlayer,
+    targetedByPlayer,
+    teamA: buildTeam(teamAEvents, 'equipoA'),
+    teamB: buildTeam(teamBEvents, 'equipoB'),
     teamAWinners,
     teamBWinners,
     topWinnerPlayerId: topByRecord(winnersByPlayer),
-    topUnforcedErrorsPlayerId: topByRecord(errorsByPlayer)
+    topUnforcedErrorsPlayerId: topByRecord(errorsByPlayer),
+    topTargetedPlayerId: topByRecord(targetedByPlayer)
   };
 };
 

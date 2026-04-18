@@ -3,10 +3,29 @@ import { Link } from 'react-router-dom';
 import { Card } from '@/components/ui/Card';
 import { Select } from '@/components/ui/Select';
 import { Input } from '@/components/ui/Input';
+import { Badge } from '@/components/ui/Badge';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useMatches } from '@/features/matches/hooks/useMatches';
 import { usePlayers } from '@/features/players/hooks/usePlayers';
-import { Badge } from '@/components/ui/Badge';
 import { formatDate } from '@/shared/formatters/date';
+
+const STATUS_LABEL: Record<string, string> = {
+  pendiente: 'Pendiente',
+  en_curso: 'En curso',
+  finalizado: 'Finalizado'
+};
+
+const FORMAT_COLOR: Record<string, 'slate' | 'blue' | 'yellow'> = {
+  amistoso: 'slate',
+  entrenamiento: 'blue',
+  torneo: 'yellow'
+};
+
+const FORMAT_LABEL: Record<string, string> = {
+  amistoso: 'Amistoso',
+  entrenamiento: 'Entren.',
+  torneo: 'Torneo'
+};
 
 export const MatchesListPage = () => {
   const [from, setFrom] = useState('');
@@ -20,83 +39,163 @@ export const MatchesListPage = () => {
   const { data: matches, isLoading } = useMatches(filters);
   const { data: players } = usePlayers(true);
 
-  const playerMap = new Map((players ?? []).map((player) => [player.id, `${player.firstName} ${player.lastName}`]));
+  const playerMap = new Map((players ?? []).map((p) => [p.id, `${p.firstName} ${p.lastName}`]));
+
+  const hasFilters = from || to || format !== 'all' || status !== 'all' || playerId !== 'all';
 
   return (
     <section className="page-shell space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
           <h1 className="page-title">Partidos</h1>
           <p className="page-subtitle">Filtra y gestiona partidos</p>
         </div>
-        <Link className="btn-primary" to="/matches/new">Nuevo partido</Link>
+        <Link className="btn-primary" to="/matches/new">+ Nuevo</Link>
       </div>
 
-      <Card className="card-body grid gap-3 md:grid-cols-5">
-        <Input label="Desde" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
-        <Input label="Hasta" type="date" value={to} onChange={(event) => setTo(event.target.value)} />
-        <Select label="Formato" value={format} onChange={(event) => setFormat(event.target.value as typeof format)}>
+      <Card className="card-body grid gap-3 sm:grid-cols-2 md:grid-cols-5">
+        <Input label="Desde" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+        <Input label="Hasta" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+        <Select label="Formato" value={format} onChange={(e) => setFormat(e.target.value as typeof format)}>
           <option value="all">Todos</option>
           <option value="amistoso">Amistoso</option>
           <option value="entrenamiento">Entrenamiento</option>
           <option value="torneo">Torneo</option>
         </Select>
-        <Select label="Estado" value={status} onChange={(event) => setStatus(event.target.value as typeof status)}>
+        <Select label="Estado" value={status} onChange={(e) => setStatus(e.target.value as typeof status)}>
           <option value="all">Todos</option>
           <option value="pendiente">Pendiente</option>
           <option value="en_curso">En curso</option>
           <option value="finalizado">Finalizado</option>
         </Select>
-        <Select label="Jugador" value={playerId} onChange={(event) => setPlayerId(event.target.value)}>
+        <Select label="Jugador" value={playerId} onChange={(e) => setPlayerId(e.target.value)}>
           <option value="all">Todos</option>
-          {players?.map((player) => (
-            <option value={player.id} key={player.id}>{player.firstName} {player.lastName}</option>
+          {players?.map((p) => (
+            <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>
           ))}
         </Select>
       </Card>
 
-      <Card>
-        <div className="overflow-x-auto">
-          <table className="table">
-            <thead>
-              <tr>
-                <th className="th">Fecha</th>
-                <th className="th">Formato</th>
-                <th className="th">Equipos</th>
-                <th className="th">Estado</th>
-                <th className="th">Resultado</th>
-                <th className="th">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading ? (
-                <tr><td className="td" colSpan={6}>Cargando...</td></tr>
-              ) : matches?.map((match) => (
-                <tr key={match.id} className="border-t border-slate-100">
-                  <td className="td">{formatDate(match.date)}</td>
-                  <td className="td capitalize">{match.format}</td>
-                  <td className="td">
-                    <p>A: {match.teamA.map((id) => playerMap.get(id) ?? id).join(' / ')}</p>
-                    <p>B: {match.teamB.map((id) => playerMap.get(id) ?? id).join(' / ')}</p>
-                  </td>
-                  <td className="td">
-                    <Badge color={match.status === 'finalizado' ? 'green' : match.status === 'en_curso' ? 'yellow' : 'slate'}>
-                      {match.status}
-                    </Badge>
-                  </td>
-                  <td className="td">{match.setsWonTeamA}-{match.setsWonTeamB}</td>
-                  <td className="td">
-                    <div className="flex flex-wrap gap-2">
-                      <Link className="btn-secondary" to={`/matches/${match.id}`}>Ver</Link>
-                      <Link className="btn-secondary" to={`/matches/${match.id}/events`}>Eventos</Link>
+      {isLoading ? (
+        <Card className="card-body">
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-16 animate-pulse rounded-lg bg-slate-800/60" />
+            ))}
+          </div>
+        </Card>
+      ) : !matches?.length ? (
+        <EmptyState
+          title="Sin partidos"
+          description={hasFilters ? 'No hay partidos con los filtros seleccionados.' : 'Aún no se han registrado partidos.'}
+          action={<Link className="btn-primary" to="/matches/new">Crear primer partido</Link>}
+        />
+      ) : (
+        <Card>
+          {/* Mobile: cards apiladas */}
+          <div className="divide-y divide-slate-800 md:hidden">
+            {matches.map((match) => (
+              <div key={match.id} className="p-3 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-xs text-slate-400">{formatDate(match.date)}</p>
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      <Badge color={FORMAT_COLOR[match.format] ?? 'slate'}>
+                        {FORMAT_LABEL[match.format] ?? match.format}
+                      </Badge>
+                      <Badge color={match.status === 'finalizado' ? 'green' : match.status === 'en_curso' ? 'yellow' : 'slate'}>
+                        {STATUS_LABEL[match.status] ?? match.status}
+                      </Badge>
                     </div>
-                  </td>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <span className="text-lg font-bold text-slate-100 tabular-nums">
+                      {match.setsWonTeamA}
+                      <span className="mx-1 text-slate-600">-</span>
+                      {match.setsWonTeamB}
+                    </span>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wide">sets</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 rounded-lg bg-slate-800/40 p-2 text-xs">
+                  <div>
+                    <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Eq. A</p>
+                    {match.teamA.map((id) => (
+                      <p key={id} className="truncate text-slate-200">{playerMap.get(id) ?? id}</p>
+                    ))}
+                  </div>
+                  <div>
+                    <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Eq. B</p>
+                    {match.teamB.map((id) => (
+                      <p key={id} className="truncate text-slate-200">{playerMap.get(id) ?? id}</p>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Link className="btn-secondary flex-1 py-1.5 text-xs" to={`/matches/${match.id}`}>Ver detalle</Link>
+                  <Link className="btn-secondary flex-1 py-1.5 text-xs" to={`/matches/${match.id}/events`}>Eventos</Link>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop: tabla */}
+          <div className="hidden overflow-x-auto md:block">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th className="th w-24">Fecha</th>
+                  <th className="th w-28">Formato</th>
+                  <th className="th">Equipos</th>
+                  <th className="th w-28">Estado</th>
+                  <th className="th w-20 text-center">Sets</th>
+                  <th className="th w-32">Acciones</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+              </thead>
+              <tbody>
+                {matches.map((match) => (
+                  <tr key={match.id} className="border-t border-slate-800 hover:bg-slate-800/30 transition-colors">
+                    <td className="td text-slate-400 text-xs">{formatDate(match.date)}</td>
+                    <td className="td">
+                      <Badge color={FORMAT_COLOR[match.format] ?? 'slate'}>
+                        {FORMAT_LABEL[match.format] ?? match.format}
+                      </Badge>
+                    </td>
+                    <td className="td">
+                      <div className="grid grid-cols-2 gap-x-4 text-xs">
+                        <div>
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 mr-1">A</span>
+                          {match.teamA.map((id) => playerMap.get(id) ?? id).join(' / ')}
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 mr-1">B</span>
+                          {match.teamB.map((id) => playerMap.get(id) ?? id).join(' / ')}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="td">
+                      <Badge color={match.status === 'finalizado' ? 'green' : match.status === 'en_curso' ? 'yellow' : 'slate'}>
+                        {STATUS_LABEL[match.status] ?? match.status}
+                      </Badge>
+                    </td>
+                    <td className="td text-center font-bold tabular-nums">
+                      {match.setsWonTeamA}
+                      <span className="mx-1 text-slate-600">-</span>
+                      {match.setsWonTeamB}
+                    </td>
+                    <td className="td">
+                      <div className="flex gap-1.5">
+                        <Link className="btn-secondary px-2 py-1 text-xs" to={`/matches/${match.id}`}>Ver</Link>
+                        <Link className="btn-secondary px-2 py-1 text-xs" to={`/matches/${match.id}/events`}>Eventos</Link>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
     </section>
   );
 };

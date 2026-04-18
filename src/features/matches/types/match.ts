@@ -3,6 +3,17 @@ import type { EntityId, TimestampFields } from '@/shared/types/base';
 export type MatchFormat = 'amistoso' | 'entrenamiento' | 'torneo';
 export type MatchStatus = 'pendiente' | 'en_curso' | 'finalizado';
 export type MatchWinner = 'equipoA' | 'equipoB' | null;
+export type MatchTeam = 'equipoA' | 'equipoB';
+
+export interface MatchLiveState {
+  setNumber: number;
+  gameNumber: number;
+  pointNumber: number;
+  gamesInSetA: number;
+  gamesInSetB: number;
+  currentServerPlayerId: string | null;
+  updatedAt: string;
+}
 
 export interface Match extends TimestampFields {
   id: EntityId;
@@ -16,6 +27,7 @@ export interface Match extends TimestampFields {
   setsWonTeamA: number;
   setsWonTeamB: number;
   winner: MatchWinner;
+  liveState?: MatchLiveState;
 }
 
 export interface MatchFilters {

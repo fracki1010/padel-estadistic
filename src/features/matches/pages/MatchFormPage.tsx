@@ -9,7 +9,7 @@ import type { MatchFormValues } from '@/features/matches/schemas/matchSchema';
 export const MatchFormPage = ({ mode }: { mode: 'create' | 'edit' }) => {
   const navigate = useNavigate();
   const { id } = useParams();
-  const { data: players } = usePlayers(true);
+  const { data: players } = usePlayers(false);
   const { data: match } = useMatch(id);
   const createMutation = useCreateMatch();
   const updateMutation = useUpdateMatch();
@@ -31,6 +31,12 @@ export const MatchFormPage = ({ mode }: { mode: 'create' | 'edit' }) => {
       winner: match.winner ?? 'none'
     };
   }, [match]);
+
+  const selectablePlayers = useMemo(() => {
+    const all = players ?? [];
+    if (mode === 'create') return all.filter((player) => player.active);
+    return all;
+  }, [mode, players]);
 
   const handleSubmit = async (values: MatchFormValues) => {
     const payload = {
@@ -56,13 +62,13 @@ export const MatchFormPage = ({ mode }: { mode: 'create' | 'edit' }) => {
 
   return (
     <section className="page-shell space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="page-title">{mode === 'create' ? 'Nuevo partido' : 'Editar partido'}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="page-title min-w-0">{mode === 'create' ? 'Nuevo partido' : 'Editar partido'}</h1>
         <Link to="/matches" className="btn-secondary">Volver</Link>
       </div>
       <Card className="card-body">
         <MatchForm
-          players={players ?? []}
+          players={selectablePlayers}
           initialValues={initialValues}
           loading={createMutation.isPending || updateMutation.isPending}
           onSubmit={handleSubmit}

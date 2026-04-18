@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -32,11 +33,16 @@ export const MatchForm = ({ players, initialValues, loading, onSubmit }: Props) 
   const {
     register,
     handleSubmit,
+    reset,
     formState: { errors }
   } = useForm<MatchFormValues>({
     resolver: zodResolver(matchSchema),
     defaultValues: initialValues ?? defaultValues
   });
+
+  useEffect(() => {
+    reset(initialValues ?? defaultValues);
+  }, [initialValues, reset]);
 
   return (
     <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
