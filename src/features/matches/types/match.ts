@@ -1,0 +1,30 @@
+import type { EntityId, TimestampFields } from '@/shared/types/base';
+
+export type MatchFormat = 'amistoso' | 'entrenamiento' | 'torneo';
+export type MatchStatus = 'pendiente' | 'en_curso' | 'finalizado';
+export type MatchWinner = 'equipoA' | 'equipoB' | null;
+
+export interface Match extends TimestampFields {
+  id: EntityId;
+  date: string;
+  location?: string;
+  format: MatchFormat;
+  teamA: [string, string];
+  teamB: [string, string];
+  notes?: string;
+  status: MatchStatus;
+  setsWonTeamA: number;
+  setsWonTeamB: number;
+  winner: MatchWinner;
+}
+
+export interface MatchFilters {
+  from?: string;
+  to?: string;
+  format?: MatchFormat | 'all';
+  status?: MatchStatus | 'all';
+  playerId?: string | 'all';
+}
+
+export type CreateMatchInput = Omit<Match, 'id' | 'createdAt' | 'updatedAt'>;
+export type UpdateMatchInput = Partial<CreateMatchInput>;
