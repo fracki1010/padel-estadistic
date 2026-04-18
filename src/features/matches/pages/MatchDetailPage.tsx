@@ -88,7 +88,7 @@ export const MatchDetailPage = () => {
       count: number;
     }>();
     filteredEvents.forEach((e) => {
-      if (!e.courtZone || !e.toZone) return;
+      if (!e.courtZone || !e.toZone || !match) return;
       const team = match.teamA.includes(e.playerId) ? 'A' : 'B';
       const key  = `${team}|${e.courtZone}|${e.toZone}`;
       if (map.has(key)) map.get(key)!.count++;
@@ -310,7 +310,9 @@ export const MatchDetailPage = () => {
                     />
                     <Tooltip {...CHART_TOOLTIP} />
                     <Legend
-                      formatter={(v) => v === 'A' ? teamANames.join('/') : teamBNames.join('/')}
+                      formatter={(v) => v === 'A'
+                        ? teamANames.map((n) => n.split(' ')[0]).join('/')
+                        : teamBNames.map((n) => n.split(' ')[0]).join('/')}
                       iconSize={10}
                       wrapperStyle={{ fontSize: 11, color: '#94a3b8', paddingTop: 8 }}
                     />

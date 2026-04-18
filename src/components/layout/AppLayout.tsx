@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 
@@ -42,17 +43,25 @@ const IconRankings = () => (
   </svg>
 );
 
+const IconProfile = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5">
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+  </svg>
+);
+
 const links = [
-  { to: '/dashboard', label: 'Inicio', Icon: IconDashboard },
-  { to: '/players', label: 'Jugadores', Icon: IconPlayers },
-  { to: '/matches', label: 'Partidos', Icon: IconMatches },
-  { to: '/stats', label: 'Stats', Icon: IconStats },
-  { to: '/rankings', label: 'Rankings', Icon: IconRankings }
+  { to: '/dashboard', label: 'Inicio',     Icon: IconDashboard },
+  { to: '/players',   label: 'Jugadores',  Icon: IconPlayers   },
+  { to: '/matches',   label: 'Partidos',   Icon: IconMatches   },
+  { to: '/stats',     label: 'Stats',      Icon: IconStats     },
+  { to: '/rankings',  label: 'Rankings',   Icon: IconRankings  },
 ];
 
 export const AppLayout = () => {
   const { logout, user } = useAuth();
   const navigate = useNavigate();
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const handleLogout = async () => {
     await logout();
@@ -60,53 +69,55 @@ export const AppLayout = () => {
   };
 
   return (
-    <div className="mx-auto flex h-[100svh] min-h-[100svh] w-full min-w-0 max-w-screen-sm flex-col overflow-hidden bg-gradient-to-b from-slate-950 via-slate-950 to-slate-900">
-      <header className="z-20 border-b border-slate-800 bg-slate-950/95 backdrop-blur">
-        <div
-          className="flex min-w-0 items-center justify-between gap-3 px-4 py-3"
-          style={{
-            paddingTop: 'max(0.75rem, env(safe-area-inset-top))',
-            paddingLeft: 'max(1rem, env(safe-area-inset-left))',
-            paddingRight: 'max(1rem, env(safe-area-inset-right))'
-          }}
-        >
-          <div className="flex min-w-0 items-center gap-2.5">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-500">
-              <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5 text-slate-950">
-                <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="2" />
-                <path d="M12 3c1.5 2.5 2 5 2 9s-.5 6.5-2 9" stroke="currentColor" strokeWidth="2" fill="none" />
-                <path d="M12 3c-1.5 2.5-2 5-2 9s.5 6.5 2 9" stroke="currentColor" strokeWidth="2" fill="none" />
-                <path d="M3.6 9h16.8M3.6 15h16.8" stroke="currentColor" strokeWidth="2" fill="none" />
-              </svg>
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-bold tracking-tight text-slate-100">Padel Stats</p>
-              <p className="truncate text-xs text-slate-500">{user?.email}</p>
-            </div>
-          </div>
-          <button className="btn-secondary shrink-0 px-3 py-1.5 text-xs" onClick={handleLogout}>
-            Salir
-          </button>
-        </div>
-      </header>
+    <div className="mx-auto flex h-dvh w-full min-w-0 max-w-screen-sm flex-col overflow-hidden bg-gradient-to-b from-slate-950 via-slate-950 to-slate-900">
 
-      <main className="min-h-0 w-full min-w-0 max-w-full flex-1 overflow-y-auto overflow-x-hidden">
+      <main
+        className="min-h-0 w-full min-w-0 max-w-full flex-1 overflow-y-auto overflow-x-hidden"
+        style={{ paddingTop: 'env(safe-area-inset-top)' }}
+      >
         <Outlet />
       </main>
+
+      {/* Panel de perfil (se despliega encima del nav) */}
+      {profileOpen && (
+        <div className="border-t border-slate-700 bg-slate-900 px-5 py-4"
+          style={{ paddingLeft: 'max(1.25rem, env(safe-area-inset-left))', paddingRight: 'max(1.25rem, env(safe-area-inset-right))' }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-500/20">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5 text-brand-400">
+                <circle cx="12" cy="8" r="4" />
+                <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+              </svg>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-slate-100">Padel Stats</p>
+              <p className="truncate text-xs text-slate-400">{user?.email}</p>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="shrink-0 rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-300 hover:border-red-700 hover:text-red-400 transition-colors"
+            >
+              Cerrar sesión
+            </button>
+          </div>
+        </div>
+      )}
 
       <nav
         className="border-t border-slate-800 bg-slate-950/95 backdrop-blur"
         style={{
-          paddingLeft: 'max(0.25rem, env(safe-area-inset-left))',
-          paddingRight: 'max(0.25rem, env(safe-area-inset-right))',
-          paddingBottom: 'max(0.25rem, env(safe-area-inset-bottom))'
+          paddingLeft:   'max(0.25rem, env(safe-area-inset-left))',
+          paddingRight:  'max(0.25rem, env(safe-area-inset-right))',
+          paddingBottom: 'max(0.25rem, env(safe-area-inset-bottom))',
         }}
       >
-        <div className="grid w-full min-w-0 grid-cols-5 px-1 py-1">
+        <div className="grid w-full grid-cols-6 px-1 py-1">
           {links.map(({ to, label, Icon }) => (
             <NavLink
               key={to}
               to={to}
+              onClick={() => setProfileOpen(false)}
               className={({ isActive }) =>
                 `flex min-w-0 flex-col items-center gap-1 rounded-xl px-1 py-2 transition ${
                   isActive
@@ -123,6 +134,20 @@ export const AppLayout = () => {
               )}
             </NavLink>
           ))}
+
+          {/* Tab Perfil */}
+          <button
+            type="button"
+            onClick={() => setProfileOpen((v) => !v)}
+            className={`flex min-w-0 flex-col items-center gap-1 rounded-xl px-1 py-2 transition ${
+              profileOpen
+                ? 'bg-brand-500/15 text-brand-300'
+                : 'text-slate-500 hover:bg-slate-900 hover:text-slate-300'
+            }`}
+          >
+            <IconProfile />
+            <span className="block truncate text-[10px] font-medium leading-none">Perfil</span>
+          </button>
         </div>
       </nav>
     </div>
