@@ -1,7 +1,7 @@
 import type { Match } from '@/features/matches/types/match';
 import type { EventType, MatchEvent } from '@/features/matches/types/matchEvent';
 import type { Player } from '@/features/players/types/player';
-import type { DashboardStats, MatchStats, PlayerStats, Rankings } from '@/features/stats/types/stats';
+import type { DashboardStats, MatchStats, PlayerMatchStats, PlayerStats, Rankings } from '@/features/stats/types/stats';
 
 // Todos los tipos de evento que cuentan como golpe ganador en estadísticas.
 // ace se contabiliza por separado; doble_falta/errores no cuentan como winners.
@@ -133,6 +133,27 @@ export const getMatchStats = (events: MatchEvent[], match: Match): MatchStats =>
     return acc;
   }, {});
 
+  const allPlayers = [...match.teamA, ...match.teamB];
+  const playerBreakdown = Object.fromEntries(
+    allPlayers.map((pid): [string, PlayerMatchStats] => {
+      const pe = matchEvents.filter((e) => e.playerId === pid);
+      return [pid, {
+        winners:        pe.filter(isWinner).length,
+        unforcedErrors: pe.filter((e) => e.eventType === 'error_no_forzado').length,
+        forcedErrors:   pe.filter((e) => e.eventType === 'error_forzado').length,
+        aces:           pe.filter((e) => e.eventType === 'ace').length,
+        doubleFaults:   pe.filter((e) => e.eventType === 'doble_falta').length,
+        bandejas:       pe.filter((e) => e.eventType === 'bandeja_ganadora').length,
+        viboras:        pe.filter((e) => e.eventType === 'vibora_ganadora').length,
+        globos:         pe.filter((e) => e.eventType === 'globo_ganador').length,
+        passingShotsWon:pe.filter((e) => e.eventType === 'passing_shot').length,
+        x3Winners:      pe.filter((e) => e.eventType === 'x3_ganador').length,
+        x4Winners:      pe.filter((e) => e.eventType === 'x4_ganador').length,
+        totalEvents:    pe.length,
+      }];
+    })
+  );
+
   const teamAWinners = matchEvents.filter((e) => isWinner(e) && e.winningTeam === 'equipoA').length;
   const teamBWinners = matchEvents.filter((e) => isWinner(e) && e.winningTeam === 'equipoB').length;
 
@@ -158,6 +179,7 @@ export const getMatchStats = (events: MatchEvent[], match: Match): MatchStats =>
     winnersByPlayer,
     errorsByPlayer,
     targetedByPlayer,
+    playerBreakdown,
     teamA: buildTeam(teamAEvents, 'equipoA'),
     teamB: buildTeam(teamBEvents, 'equipoB'),
     teamAWinners,

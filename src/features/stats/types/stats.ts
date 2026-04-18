@@ -33,6 +33,21 @@ export interface PlayerStats {
   winnersMinusUnforcedErrors: number;
 }
 
+export interface PlayerMatchStats {
+  winners: number;
+  unforcedErrors: number;
+  forcedErrors: number;
+  aces: number;
+  doubleFaults: number;
+  bandejas: number;
+  viboras: number;
+  globos: number;
+  passingShotsWon: number;
+  x3Winners: number;
+  x4Winners: number;
+  totalEvents: number;
+}
+
 export interface TeamStats {
   winners: number;
   aces: number;
@@ -47,6 +62,7 @@ export interface MatchStats {
   winnersByPlayer: Record<string, number>;
   errorsByPlayer: Record<string, number>;
   targetedByPlayer: Record<string, number>;
+  playerBreakdown: Record<string, PlayerMatchStats>;
   teamA: TeamStats;
   teamB: TeamStats;
   // legacy — mantenidos por compatibilidad

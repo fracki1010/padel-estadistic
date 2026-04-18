@@ -6,11 +6,12 @@ import { Button } from '@/components/ui/Button';
 import { useCreateMatchEvent, useDeleteMatchEvent, useEventsByMatch, useMatch, useUpdateMatch } from '@/features/matches/hooks/useMatches';
 import { usePlayers } from '@/features/players/hooks/usePlayers';
 import { nowIso } from '@/shared/utils/firestore';
-import type { EventType, ShotType, ZoneType } from '@/features/matches/types/matchEvent';
+import { CourtZonePicker } from '@/components/ui/CourtMap';
+import type { CourtZone, EventType, ShotType, ZoneType } from '@/features/matches/types/matchEvent';
 import type { MatchTeam } from '@/features/matches/types/match';
 
 type TeamSide = MatchTeam;
-type GuidedStep = 'player' | 'result' | 'action' | 'target';
+type GuidedStep = 'player' | 'result' | 'action' | 'zone' | 'target';
 type GuidedOutcome = 'won' | 'lost';
 type ScoreSlide = 'sets' | 'game' | 'games';
 
@@ -89,6 +90,7 @@ export const MatchEventsPage = () => {
   const [guidedStep, setGuidedStep] = useState<GuidedStep>('player');
   const [guidedOutcome, setGuidedOutcome] = useState<GuidedOutcome>('won');
   const [pendingAction, setPendingAction] = useState<QuickAction | null>(null);
+  const [courtZone, setCourtZone] = useState<CourtZone | null>(null);
   const [scoreSlide, setScoreSlide] = useState<ScoreSlide>('game');
 
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -222,6 +224,7 @@ export const MatchEventsPage = () => {
     setGuidedOutcome('won');
     setGuidedStep('player');
     setPendingAction(null);
+    setCourtZone(null);
   };
 
   useEffect(() => {
@@ -318,6 +321,7 @@ export const MatchEventsPage = () => {
         eventType: action.eventType,
         shotType: action.shotType,
         zone: action.zone,
+        courtZone: courtZone ?? undefined,
         targetPlayerId,
         notes: ''
       });
@@ -343,6 +347,7 @@ export const MatchEventsPage = () => {
       setGuidedStep('player');
       setGuidedOutcome('won');
       setPendingAction(null);
+      setCourtZone(null);
 
       if (cycleTimeoutRef.current !== null) {
         window.clearTimeout(cycleTimeoutRef.current);
@@ -500,13 +505,11 @@ export const MatchEventsPage = () => {
             <div className="rounded-lg border border-slate-700 bg-slate-900 p-2.5">
               <p className="text-xs uppercase tracking-wide text-slate-400">Estado del ciclo</p>
               <p className="mt-1 text-xs text-slate-200">
-                {guidedStep === 'player'
-                  ? '1) Selecciona jugador'
-                  : guidedStep === 'result'
-                    ? `2) ${selectedPlayerName ?? '-'}: ¿ganó o perdió?`
-                    : guidedStep === 'action'
-                      ? `3) Acción de ${selectedPlayerName ?? '-'}`
-                      : `4) ¿A quién iba dirigido? (${pendingAction?.label ?? '-'})`}
+                {guidedStep === 'player'  ? '1) Selecciona jugador'
+                  : guidedStep === 'result' ? `2) ${selectedPlayerName ?? '-'}: ¿ganó o perdió?`
+                  : guidedStep === 'action' ? `3) Acción de ${selectedPlayerName ?? '-'}`
+                  : guidedStep === 'zone'   ? `4) ¿Desde dónde? (${pendingAction?.label ?? '-'})`
+                  :                          `5) ¿A quién iba dirigido?`}
               </p>
               {recentFeedback ? <p className="mt-1 text-xs text-brand-300">Último: {recentFeedback}</p> : null}
               {saveError ? <p className="mt-1 text-xs text-red-300">{saveError}</p> : null}
@@ -598,7 +601,7 @@ export const MatchEventsPage = () => {
                     type="button"
                     onClick={() => {
                       setPendingAction(action);
-                      setGuidedStep('target');
+                      setGuidedStep('zone');
                     }}
                     disabled={createEvent.isPending}
                     className={`h-full min-w-0 rounded-lg border px-3 py-3 text-center text-base font-medium disabled:cursor-not-allowed disabled:opacity-60 ${
@@ -619,10 +622,37 @@ export const MatchEventsPage = () => {
             </div>
           ) : null}
 
+          {guidedStep === 'zone' ? (
+            <div className="flex h-full w-full min-h-0 flex-col gap-2">
+              <p className="text-center text-base font-semibold text-slate-100">
+                Paso 4: ¿Desde dónde? <span className="text-sm font-normal text-slate-400">({pendingAction?.label})</span>
+              </p>
+              <div className="flex-1 min-h-0 flex items-center justify-center px-2">
+                <CourtZonePicker
+                  selected={courtZone}
+                  onSelect={(z) => {
+                    setCourtZone(z);
+                    setGuidedStep('target');
+                  }}
+                />
+              </div>
+              <Button
+                variant="secondary"
+                className="w-full"
+                onClick={() => { setCourtZone(null); setGuidedStep('target'); }}
+              >
+                Omitir (sin zona)
+              </Button>
+              <Button variant="secondary" className="w-full" onClick={() => { setGuidedStep('action'); setPendingAction(null); }}>
+                Volver a acción
+              </Button>
+            </div>
+          ) : null}
+
           {guidedStep === 'target' ? (
             <div className="flex h-full w-full min-h-0 flex-col gap-2">
               <p className="text-center text-base font-semibold text-slate-100">
-                Paso 4: ¿A quién iba dirigido?
+                Paso 5: ¿A quién iba dirigido?
               </p>
               <div className="grid min-h-0 flex-1 auto-rows-fr grid-cols-2 gap-2">
                 {playersInMatch
@@ -650,8 +680,8 @@ export const MatchEventsPage = () => {
               >
                 Omitir (sin target)
               </Button>
-              <Button variant="secondary" className="w-full" onClick={() => { setGuidedStep('action'); setPendingAction(null); }}>
-                Volver a acción
+              <Button variant="secondary" className="w-full" onClick={() => setGuidedStep('zone')}>
+                Volver a zona
               </Button>
             </div>
           ) : null}

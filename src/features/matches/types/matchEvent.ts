@@ -40,6 +40,11 @@ export type ShotType =
 
 export type ZoneType = 'red' | 'fondo' | 'transicion' | null;
 
+export type CourtZone =
+  | 'fondo_izq' | 'fondo_der'
+  | 'medio_izq' | 'medio_der'
+  | 'red_izq'   | 'red_der';
+
 export interface MatchEvent {
   id: string;
   matchId: string;
@@ -52,7 +57,8 @@ export interface MatchEvent {
   eventType: EventType;
   shotType: ShotType;
   zone?: ZoneType;
-  targetPlayerId?: string; // jugador al que iba dirigido el golpe
+  courtZone?: CourtZone;    // posición del ejecutor en su mitad (6 zonas)
+  targetPlayerId?: string;
   notes?: string;
   createdAt: string;
 }
