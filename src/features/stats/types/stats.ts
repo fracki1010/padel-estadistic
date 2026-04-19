@@ -9,26 +9,68 @@ export interface PlayerStats {
   matchesLost: number;
   winRate: number;
   totalEvents: number;
+  // Golpes ganadores
+  winners: number;
+  netWinners: number;
+  baselineWinners: number;
+  bandejas: number;
+  viboras: number;
+  globos: number;
+  passingShotsWon: number;
+  x3Winners: number;
+  x4Winners: number;
+  recuperaciones: number;
+  // Saque
+  aces: number;
+  doubleFaults: number;
+  // Errores
+  unforcedErrors: number;
+  forcedErrors: number;
+  doubleTouches: number;
+  // Ratios
+  winnersRate: number;
+  unforcedErrorRate: number;
+  winnersMinusUnforcedErrors: number;
+}
+
+export interface PlayerMatchStats {
   winners: number;
   unforcedErrors: number;
   forcedErrors: number;
   aces: number;
   doubleFaults: number;
-  netWinners: number;
-  baselineWinners: number;
-  winnersRate: number;
-  unforcedErrorRate: number;
-  winnersMinusUnforcedErrors: number;
+  bandejas: number;
+  viboras: number;
+  globos: number;
+  passingShotsWon: number;
+  x3Winners: number;
+  x4Winners: number;
+  totalEvents: number;
+}
+
+export interface TeamStats {
+  winners: number;
+  aces: number;
+  doubleFaults: number;
+  unforcedErrors: number;
+  forcedErrors: number;
+  balance: number;
 }
 
 export interface MatchStats {
   totalEvents: number;
   winnersByPlayer: Record<string, number>;
   errorsByPlayer: Record<string, number>;
+  targetedByPlayer: Record<string, number>;
+  playerBreakdown: Record<string, PlayerMatchStats>;
+  teamA: TeamStats;
+  teamB: TeamStats;
+  // legacy — mantenidos por compatibilidad
   teamAWinners: number;
   teamBWinners: number;
   topWinnerPlayerId: string | null;
   topUnforcedErrorsPlayerId: string | null;
+  topTargetedPlayerId: string | null;
 }
 
 export interface Rankings {

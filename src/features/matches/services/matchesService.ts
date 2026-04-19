@@ -17,6 +17,20 @@ import type { CreateMatchEventInput, MatchEvent } from '@/features/matches/types
 const matchesCollection = collection(db, 'matches');
 const matchEventsCollection = collection(db, 'match_events');
 
+const mapLiveState = (data: Record<string, unknown>): Match['liveState'] => {
+  if (!data.liveState || typeof data.liveState !== 'object') return undefined;
+  const liveState = data.liveState as Record<string, unknown>;
+  return {
+    setNumber: Number(liveState.setNumber ?? 1),
+    gameNumber: Number(liveState.gameNumber ?? 1),
+    pointNumber: Number(liveState.pointNumber ?? 1),
+    gamesInSetA: Number(liveState.gamesInSetA ?? 0),
+    gamesInSetB: Number(liveState.gamesInSetB ?? 0),
+    currentServerPlayerId: liveState.currentServerPlayerId ? String(liveState.currentServerPlayerId) : null,
+    updatedAt: toISOString(liveState.updatedAt as string)
+  };
+};
+
 const mapMatch = (id: string, data: Record<string, unknown>): Match => ({
   id,
   date: String(data.date ?? ''),
@@ -29,6 +43,10 @@ const mapMatch = (id: string, data: Record<string, unknown>): Match => ({
   setsWonTeamA: Number(data.setsWonTeamA ?? 0),
   setsWonTeamB: Number(data.setsWonTeamB ?? 0),
   winner: (data.winner as Match['winner']) ?? null,
+  bestOf: (data.bestOf === 5 ? 5 : 3) as 3 | 5,
+  deuce: (data.deuce === 'oro' ? 'oro' : 'ventaja') as 'oro' | 'ventaja',
+  playerSides: data.playerSides ? (data.playerSides as Record<string, 'drive' | 'reves'>) : undefined,
+  liveState: mapLiveState(data),
   createdAt: toISOString(data.createdAt as string),
   updatedAt: toISOString(data.updatedAt as string)
 });
@@ -45,6 +63,9 @@ const mapMatchEvent = (id: string, data: Record<string, unknown>): MatchEvent =>
   eventType: (data.eventType as MatchEvent['eventType']) ?? 'winner',
   shotType: (data.shotType as MatchEvent['shotType']) ?? 'drive',
   zone: (data.zone as MatchEvent['zone']) ?? null,
+  courtZone: data.courtZone ? (data.courtZone as MatchEvent['courtZone']) : undefined,
+  toZone: data.toZone ? (data.toZone as MatchEvent['toZone']) : undefined,
+  targetPlayerId: data.targetPlayerId ? String(data.targetPlayerId) : undefined,
   notes: data.notes ? String(data.notes) : '',
   createdAt: toISOString(data.createdAt as string)
 });
@@ -113,10 +134,9 @@ export const matchesService = {
   },
 
   async createEvent(input: CreateMatchEventInput) {
-    await addDoc(matchEventsCollection, {
-      ...input,
-      createdAt: nowIso()
-    });
+    const payload: Record<string, unknown> = { ...input, createdAt: nowIso() };
+    Object.keys(payload).forEach((k) => { if (payload[k] === undefined) delete payload[k]; });
+    await addDoc(matchEventsCollection, payload);
   },
 
   async deleteEvent(eventId: string) {

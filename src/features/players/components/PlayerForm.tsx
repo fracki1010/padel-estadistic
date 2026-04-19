@@ -48,7 +48,7 @@ export const PlayerForm = ({ initialValues, onSubmit, loading }: Props) => {
           <option value="indistinto">Indistinto</option>
         </Select>
       </div>
-      <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+      <label className="inline-flex items-center gap-2 text-sm text-slate-200">
         <input type="checkbox" {...register('active')} /> Activo
       </label>
       <Button type="submit" loading={loading}>

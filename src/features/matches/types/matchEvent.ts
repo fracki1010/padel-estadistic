@@ -1,16 +1,25 @@
 export type WinningTeam = 'equipoA' | 'equipoB';
+// Golpes ganadores propios del partido (cuentan como winners en estadísticas)
+// Errores que hacen perder el punto al jugador que los comete
+// ace y doble_falta son exclusivos del saque
 export type EventType =
-  | 'winner'
-  | 'error_no_forzado'
-  | 'error_forzado'
-  | 'ace'
-  | 'doble_falta'
-  | 'punto_largo_ganado'
-  | 'globo_ganador'
+  // --- Golpes ganadores ---
+  | 'winner'             // winner directo: drive, revés, volea, smash (vía shotType)
   | 'bandeja_ganadora'
   | 'vibora_ganadora'
+  | 'globo_ganador'
   | 'passing_shot'
-  | 'recuperacion_defensiva';
+  | 'x3_ganador'         // pelota sale por pared de fondo + lateral (Regla 13d FIP)
+  | 'x4_ganador'         // pelota sale a +4m de altura (Regla 13d FIP)
+  | 'recuperacion_defensiva'
+  | 'punto_largo_ganado'
+  // --- Saque ---
+  | 'ace'
+  | 'doble_falta'
+  // --- Errores ---
+  | 'error_no_forzado'
+  | 'error_forzado'
+  | 'doble_toque';       // golpe doble sobre la misma pelota (Regla 13i FIP)
 
 export type ShotType =
   | 'saque'
@@ -25,9 +34,17 @@ export type ShotType =
   | 'globo'
   | 'salida_de_pared'
   | 'contra_pared'
+  | 'x3'
+  | 'x4'
   | 'otro';
 
 export type ZoneType = 'red' | 'fondo' | 'transicion' | null;
+
+export type CourtZone =
+  | 'fondo_izq'  | 'fondo_centro'  | 'fondo_der'
+  | 'medio_izq'  | 'medio_centro'  | 'medio_der'
+  | 'red_izq'    | 'red_centro'    | 'red_der'
+  | 'lateral_izq' | 'lateral_der';
 
 export interface MatchEvent {
   id: string;
@@ -41,6 +58,9 @@ export interface MatchEvent {
   eventType: EventType;
   shotType: ShotType;
   zone?: ZoneType;
+  courtZone?: CourtZone;    // posición del ejecutor en su mitad (6 zonas)
+  toZone?: CourtZone;
+  targetPlayerId?: string;
   notes?: string;
   createdAt: string;
 }

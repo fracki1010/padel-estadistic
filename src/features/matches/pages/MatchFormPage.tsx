@@ -9,7 +9,7 @@ import type { MatchFormValues } from '@/features/matches/schemas/matchSchema';
 export const MatchFormPage = ({ mode }: { mode: 'create' | 'edit' }) => {
   const navigate = useNavigate();
   const { id } = useParams();
-  const { data: players } = usePlayers(true);
+  const { data: players } = usePlayers(false);
   const { data: match } = useMatch(id);
   const createMutation = useCreateMatch();
   const updateMutation = useUpdateMatch();
@@ -20,10 +20,16 @@ export const MatchFormPage = ({ mode }: { mode: 'create' | 'edit' }) => {
       date: match.date,
       location: match.location || '',
       format: match.format,
+      bestOf: match.bestOf ?? 3,
+      deuce: match.deuce ?? 'ventaja',
       teamAPlayer1Id: match.teamA[0],
+      teamAPlayer1Side: match.playerSides?.[match.teamA[0]] ?? 'drive',
       teamAPlayer2Id: match.teamA[1],
+      teamAPlayer2Side: match.playerSides?.[match.teamA[1]] ?? 'reves',
       teamBPlayer1Id: match.teamB[0],
+      teamBPlayer1Side: match.playerSides?.[match.teamB[0]] ?? 'drive',
       teamBPlayer2Id: match.teamB[1],
+      teamBPlayer2Side: match.playerSides?.[match.teamB[1]] ?? 'reves',
       notes: match.notes || '',
       status: match.status,
       setsWonTeamA: match.setsWonTeamA,
@@ -32,13 +38,27 @@ export const MatchFormPage = ({ mode }: { mode: 'create' | 'edit' }) => {
     };
   }, [match]);
 
+  const selectablePlayers = useMemo(() => {
+    const all = players ?? [];
+    if (mode === 'create') return all.filter((player) => player.active);
+    return all;
+  }, [mode, players]);
+
   const handleSubmit = async (values: MatchFormValues) => {
     const payload = {
       date: values.date,
       location: values.location,
       format: values.format,
+      bestOf: values.bestOf,
+      deuce: values.deuce,
       teamA: [values.teamAPlayer1Id, values.teamAPlayer2Id] as [string, string],
       teamB: [values.teamBPlayer1Id, values.teamBPlayer2Id] as [string, string],
+      playerSides: {
+        [values.teamAPlayer1Id]: values.teamAPlayer1Side,
+        [values.teamAPlayer2Id]: values.teamAPlayer2Side,
+        [values.teamBPlayer1Id]: values.teamBPlayer1Side,
+        [values.teamBPlayer2Id]: values.teamBPlayer2Side
+      },
       notes: values.notes,
       status: values.status,
       setsWonTeamA: values.setsWonTeamA,
@@ -56,13 +76,13 @@ export const MatchFormPage = ({ mode }: { mode: 'create' | 'edit' }) => {
 
   return (
     <section className="page-shell space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="page-title">{mode === 'create' ? 'Nuevo partido' : 'Editar partido'}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="page-title min-w-0">{mode === 'create' ? 'Nuevo partido' : 'Editar partido'}</h1>
         <Link to="/matches" className="btn-secondary">Volver</Link>
       </div>
       <Card className="card-body">
         <MatchForm
-          players={players ?? []}
+          players={selectablePlayers}
           initialValues={initialValues}
           loading={createMutation.isPending || updateMutation.isPending}
           onSubmit={handleSubmit}

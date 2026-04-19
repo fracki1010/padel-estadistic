@@ -4,16 +4,22 @@ import {
   doc,
   getDoc,
   getDocs,
-  orderBy,
   query,
   updateDoc,
   where
 } from 'firebase/firestore';
 import { db } from '@/firebase';
-import { nowIso, toISOString } from '@/shared/utils/firestore';
+import { nowIso, toISOString, withTimeout } from '@/shared/utils/firestore';
 import type { CreatePlayerInput, Player, UpdatePlayerInput } from '@/features/players/types/player';
 
 const playersCollection = collection(db, 'players');
+const WRITE_TIMEOUT_MS = 10000;
+
+const assertOnline = () => {
+  if (!navigator.onLine) {
+    throw new Error('Sin conexión a internet. Revisa tu red e intenta nuevamente.');
+  }
+};
 
 const mapPlayer = (id: string, data: Record<string, unknown>): Player => ({
   id,
@@ -23,17 +29,21 @@ const mapPlayer = (id: string, data: Record<string, unknown>): Player => ({
   dominantHand: (data.dominantHand as Player['dominantHand']) ?? 'derecha',
   preferredSide: (data.preferredSide as Player['preferredSide']) ?? 'indistinto',
   active: Boolean(data.active ?? true),
+  anonymous: Boolean(data.anonymous ?? false),
   createdAt: toISOString(data.createdAt as string),
   updatedAt: toISOString(data.updatedAt as string)
 });
 
 export const playersService = {
   async getAll(activeOnly = false): Promise<Player[]> {
+    // Avoid composite-index dependency in development by sorting client-side.
     const q = activeOnly
-      ? query(playersCollection, where('active', '==', true), orderBy('lastName', 'asc'))
-      : query(playersCollection, orderBy('lastName', 'asc'));
+      ? query(playersCollection, where('active', '==', true))
+      : query(playersCollection);
     const snapshot = await getDocs(q);
-    return snapshot.docs.map((item) => mapPlayer(item.id, item.data()));
+    return snapshot.docs
+      .map((item) => mapPlayer(item.id, item.data()))
+      .sort((a, b) => `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`));
   },
 
   async getById(id: string): Promise<Player | null> {
@@ -43,25 +53,37 @@ export const playersService = {
   },
 
   async create(input: CreatePlayerInput) {
+    assertOnline();
     const now = nowIso();
-    await addDoc(playersCollection, {
-      ...input,
-      createdAt: now,
-      updatedAt: now
-    });
+    await withTimeout(
+      addDoc(playersCollection, {
+        ...input,
+        createdAt: now,
+        updatedAt: now
+      }),
+      WRITE_TIMEOUT_MS
+    );
   },
 
   async update(id: string, input: UpdatePlayerInput) {
-    await updateDoc(doc(db, 'players', id), {
-      ...input,
-      updatedAt: nowIso()
-    });
+    assertOnline();
+    await withTimeout(
+      updateDoc(doc(db, 'players', id), {
+        ...input,
+        updatedAt: nowIso()
+      }),
+      WRITE_TIMEOUT_MS
+    );
   },
 
   async deactivate(id: string) {
-    await updateDoc(doc(db, 'players', id), {
-      active: false,
-      updatedAt: nowIso()
-    });
+    assertOnline();
+    await withTimeout(
+      updateDoc(doc(db, 'players', id), {
+        active: false,
+        updatedAt: nowIso()
+      }),
+      WRITE_TIMEOUT_MS
+    );
   }
 };

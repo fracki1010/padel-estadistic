@@ -8,3 +8,25 @@ export const toISOString = (value: Timestamp | string | Date | undefined | null)
 };
 
 export const nowIso = () => new Date().toISOString();
+
+export const withTimeout = async <T>(
+  promise: Promise<T>,
+  timeoutMs = 10000,
+  message = 'Tiempo de espera agotado al conectar con Firestore'
+): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(message));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+};
