@@ -51,11 +51,9 @@ const IconProfile = () => (
 );
 
 const links = [
-  { to: '/dashboard', label: 'Inicio',     Icon: IconDashboard },
-  { to: '/players',   label: 'Jugadores',  Icon: IconPlayers   },
-  { to: '/matches',   label: 'Partidos',   Icon: IconMatches   },
-  { to: '/stats',     label: 'Stats',      Icon: IconStats     },
-  { to: '/rankings',  label: 'Rankings',   Icon: IconRankings  },
+  { to: '/dashboard', label: 'Inicio',    Icon: IconDashboard },
+  { to: '/players',   label: 'Jugadores', Icon: IconPlayers   },
+  { to: '/matches',   label: 'Partidos',  Icon: IconMatches   },
 ];
 
 export const AppLayout = () => {
@@ -80,10 +78,11 @@ export const AppLayout = () => {
 
       {/* Panel de perfil (se despliega encima del nav) */}
       {profileOpen && (
-        <div className="border-t border-slate-700 bg-slate-900 px-5 py-4"
+        <div className="border-t border-slate-700 bg-slate-900"
           style={{ paddingLeft: 'max(1.25rem, env(safe-area-inset-left))', paddingRight: 'max(1.25rem, env(safe-area-inset-right))' }}
         >
-          <div className="flex items-center gap-3">
+          {/* User info */}
+          <div className="flex items-center gap-3 px-1 py-4">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-500/20">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5 text-brand-400">
                 <circle cx="12" cy="8" r="4" />
@@ -101,6 +100,28 @@ export const AppLayout = () => {
               Cerrar sesión
             </button>
           </div>
+
+          {/* Extra nav items */}
+          <div className="border-t border-slate-800 py-2">
+            {([
+              { to: '/stats',    label: 'Estadísticas generales', Icon: IconStats    },
+              { to: '/rankings', label: 'Rankings',               Icon: IconRankings },
+            ] as const).map(({ to, label, Icon }) => (
+              <NavLink
+                key={to}
+                to={to}
+                onClick={() => setProfileOpen(false)}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors ${
+                    isActive ? 'text-brand-300 bg-brand-500/10' : 'text-slate-300 hover:bg-slate-800'
+                  }`
+                }
+              >
+                <Icon />
+                {label}
+              </NavLink>
+            ))}
+          </div>
         </div>
       )}
 
@@ -112,14 +133,14 @@ export const AppLayout = () => {
           paddingBottom: 'max(0.25rem, env(safe-area-inset-bottom))',
         }}
       >
-        <div className="grid w-full grid-cols-6 px-1 py-1">
+        <div className="grid w-full grid-cols-4 px-2 py-1">
           {links.map(({ to, label, Icon }) => (
             <NavLink
               key={to}
               to={to}
               onClick={() => setProfileOpen(false)}
               className={({ isActive }) =>
-                `flex min-w-0 flex-col items-center gap-1 rounded-xl px-1 py-2 transition ${
+                `flex min-w-0 flex-col items-center gap-1.5 rounded-xl px-2 py-3 transition ${
                   isActive
                     ? 'bg-brand-500/15 text-brand-300'
                     : 'text-slate-500 hover:bg-slate-900 hover:text-slate-300'
@@ -128,8 +149,8 @@ export const AppLayout = () => {
             >
               {({ isActive }) => (
                 <>
-                  <span className={isActive ? 'text-brand-400' : ''}><Icon /></span>
-                  <span className="block truncate text-[10px] font-medium leading-none">{label}</span>
+                  <span className={`[&>svg]:h-6 [&>svg]:w-6 ${isActive ? 'text-brand-400' : ''}`}><Icon /></span>
+                  <span className="block truncate text-xs font-medium leading-none">{label}</span>
                 </>
               )}
             </NavLink>
@@ -139,14 +160,14 @@ export const AppLayout = () => {
           <button
             type="button"
             onClick={() => setProfileOpen((v) => !v)}
-            className={`flex min-w-0 flex-col items-center gap-1 rounded-xl px-1 py-2 transition ${
+            className={`flex min-w-0 flex-col items-center gap-1.5 rounded-xl px-2 py-3 transition ${
               profileOpen
                 ? 'bg-brand-500/15 text-brand-300'
                 : 'text-slate-500 hover:bg-slate-900 hover:text-slate-300'
             }`}
           >
-            <IconProfile />
-            <span className="block truncate text-[10px] font-medium leading-none">Perfil</span>
+            <span className="[&>svg]:h-6 [&>svg]:w-6"><IconProfile /></span>
+            <span className="block truncate text-xs font-medium leading-none">Perfil</span>
           </button>
         </div>
       </nav>

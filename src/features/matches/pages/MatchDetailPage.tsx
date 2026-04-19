@@ -6,13 +6,14 @@ import {
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { CourtHeatmap, CourtTrajectoryFocus } from '@/components/ui/CourtMap';
+import { CourtHeatmap, CourtTrajectoryFocus, toOverheadZone } from '@/components/ui/CourtMap';
 import type { CourtZone } from '@/features/matches/types/matchEvent';
 
 const ZONE_LABEL: Record<CourtZone, string> = {
   fondo_izq: 'Fondo Izq', fondo_centro: 'Fondo Ctr', fondo_der: 'Fondo Der',
   medio_izq: 'Medio Izq', medio_centro: 'Medio Ctr', medio_der: 'Medio Der',
   red_izq:   'Red Izq',   red_centro:   'Red Ctr',   red_der:   'Red Der',
+  lateral_izq: 'Lateral Izq', lateral_der: 'Lateral Der',
 };
 import { useDeleteMatch, useEventsByMatch, useMatch } from '@/features/matches/hooks/useMatches';
 import { usePlayers } from '@/features/players/hooks/usePlayers';
@@ -28,6 +29,14 @@ const WINNING_SET = new Set([
   'winner','bandeja_ganadora','vibora_ganadora','globo_ganador',
   'passing_shot','x3_ganador','x4_ganador','recuperacion_defensiva','punto_largo_ganado',
 ]);
+
+const SHOT_LABEL: Record<string, string> = {
+  saque: 'Saque', resto: 'Resto', drive: 'Drive', reves: 'Revés',
+  volea_drive: 'Vol. Drive', volea_reves: 'Vol. Revés',
+  bandeja: 'Bandeja', vibora: 'Víbora', smash: 'Smash', globo: 'Globo',
+  salida_de_pared: 'Sal. Pared', contra_pared: 'Contra Pared',
+  x3: 'X3', x4: 'X4', otro: 'Otro',
+};
 
 const EVENT_LABEL: Record<string, string> = {
   winner: 'Winner', bandeja_ganadora: 'Bandeja', vibora_ganadora: 'Víbora',
@@ -86,17 +95,26 @@ export const MatchDetailPage = () => {
       from: import('@/features/matches/types/matchEvent').CourtZone;
       to:   import('@/features/matches/types/matchEvent').CourtZone;
       count: number;
+      shotTypes: Record<string, number>;
     }>();
     filteredEvents.forEach((e) => {
       if (!e.courtZone || !e.toZone || !match) return;
-      const team = match.teamA.includes(e.playerId) ? 'A' : 'B';
-      const key  = `${team}|${e.courtZone}|${e.toZone}`;
-      if (map.has(key)) map.get(key)!.count++;
-      else map.set(key, {
-        key,
-        label: `${ZONE_LABEL[e.courtZone]} → ${ZONE_LABEL[e.toZone]}`,
-        team, from: e.courtZone, to: e.toZone, count: 1,
-      });
+      const team     = match.teamA.includes(e.playerId) ? 'A' : 'B';
+      const normFrom = toOverheadZone(e.courtZone, team);
+      const normTo   = toOverheadZone(e.toZone, team);
+      const key      = `${team}|${normFrom}|${normTo}`;
+      if (map.has(key)) {
+        const entry = map.get(key)!;
+        entry.count++;
+        entry.shotTypes[e.shotType] = (entry.shotTypes[e.shotType] ?? 0) + 1;
+      } else {
+        map.set(key, {
+          key,
+          label: `${ZONE_LABEL[normFrom]} → ${ZONE_LABEL[normTo]}`,
+          team, from: normFrom, to: normTo, count: 1,
+          shotTypes: { [e.shotType]: 1 },
+        });
+      }
     });
     return [...map.values()].sort((a, b) => b.count - a.count);
   }, [filteredEvents, match]);
@@ -453,16 +471,28 @@ export const MatchDetailPage = () => {
                           to={selectedTraj.to}
                           team={selectedTraj.team}
                           count={selectedTraj.count}
+                          shotType={Object.entries(selectedTraj.shotTypes).sort((a, b) => b[1] - a[1])[0]?.[0]}
                           teamALabel={teamANames.join(' / ')}
                           teamBLabel={teamBNames.join(' / ')}
                         />
+                        <div className="mt-3 flex flex-wrap justify-center gap-1.5">
+                          {Object.entries(selectedTraj.shotTypes)
+                            .sort((a, b) => b[1] - a[1])
+                            .map(([shot, n]) => (
+                              <span key={shot} className="rounded-full bg-slate-800 px-2.5 py-0.5 text-[11px] font-medium text-slate-300">
+                                {SHOT_LABEL[shot] ?? shot}
+                                {n > 1 && <span className="ml-1 text-amber-400 font-bold">{n}x</span>}
+                              </span>
+                            ))}
+                        </div>
                       </div>
                     )}
 
                     {/* Lista completa */}
                     <div className="divide-y divide-slate-800/60 max-h-64 overflow-y-auto">
-                      {allTrajectories.map(({ key, label, team, count }, i) => {
+                      {allTrajectories.map(({ key, label, team, count, shotTypes }, i) => {
                         const isSelected = selectedTrajKey === key;
+                        const topShot = Object.entries(shotTypes).sort((a, b) => b[1] - a[1])[0];
                         return (
                           <button
                             key={key}
@@ -474,7 +504,15 @@ export const MatchDetailPage = () => {
                           >
                             <span className="w-5 text-center text-xs font-bold text-slate-600">{i + 1}</span>
                             <span className={`h-2 w-2 shrink-0 rounded-full ${team === 'A' ? 'bg-emerald-500' : 'bg-indigo-500'}`} />
-                            <span className="flex-1 text-sm text-slate-200">{label}</span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-sm text-slate-200">{label}</span>
+                              {topShot && (
+                                <span className="text-[10px] text-slate-500">
+                                  {SHOT_LABEL[topShot[0]] ?? topShot[0]}
+                                  {Object.keys(shotTypes).length > 1 && ` +${Object.keys(shotTypes).length - 1}`}
+                                </span>
+                              )}
+                            </span>
                             <span className="tabular-nums text-sm font-bold text-slate-100">{count}</span>
                             <span className="text-[10px] text-slate-500">veces</span>
                             <span className={`text-[10px] transition-transform ${isSelected ? 'rotate-90' : ''} text-slate-600`}>›</span>
@@ -508,14 +546,14 @@ const TeamRow = ({
   return (
     <div className="py-1.5">
       <div className="mb-1 flex items-center justify-between gap-2">
-        <span className={`text-sm font-bold tabular-nums ${aWins ? 'text-emerald-400' : bWins ? 'text-slate-400' : 'text-slate-300'}`}>{fmt(a)}</span>
+        <span className={`text-sm font-bold tabular-nums ${aWins ? 'text-emerald-400' : bWins ? 'text-emerald-900' : 'text-slate-300'}`}>{fmt(a)}</span>
         <span className="text-xs text-slate-500">{label}</span>
-        <span className={`text-sm font-bold tabular-nums ${bWins ? 'text-emerald-400' : aWins ? 'text-slate-400' : 'text-slate-300'}`}>{fmt(b)}</span>
+        <span className={`text-sm font-bold tabular-nums ${bWins ? 'text-indigo-400' : aWins ? 'text-indigo-900' : 'text-slate-300'}`}>{fmt(b)}</span>
       </div>
       {total > 0 && (
-        <div className="flex h-1.5 overflow-hidden rounded-full bg-slate-800">
-          <div className={`h-full rounded-l-full ${aWins ? 'bg-emerald-500' : 'bg-slate-600'}`} style={{ width: `${aWidth}%` }} />
-          <div className={`h-full rounded-r-full ${bWins ? 'bg-emerald-500' : 'bg-slate-600'}`} style={{ width: `${100 - aWidth}%` }} />
+        <div className="flex h-2 overflow-hidden rounded-full bg-slate-800/60">
+          <div className={`h-full rounded-l-full transition-all ${aWins ? 'bg-emerald-500' : 'bg-emerald-900/60'}`} style={{ width: `${aWidth}%` }} />
+          <div className={`h-full rounded-r-full transition-all ${bWins ? 'bg-indigo-500' : 'bg-indigo-900/60'}`} style={{ width: `${100 - aWidth}%` }} />
         </div>
       )}
     </div>

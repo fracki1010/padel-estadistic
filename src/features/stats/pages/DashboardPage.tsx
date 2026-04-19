@@ -211,12 +211,12 @@ export const DashboardPage = () => {
 };
 
 const MetricCard = ({ label, value, icon }: { label: string; value: string | number; icon?: ReactNode }) => (
-  <Card className="card-body">
-    <div className="mb-2 flex items-center justify-between">
-      <p className="text-xs text-slate-500">{label}</p>
-      {icon}
+  <Card className="p-4">
+    <div className="mb-3 flex items-center justify-between">
+      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
+      {icon && <span className="[&>svg]:h-6 [&>svg]:w-6">{icon}</span>}
     </div>
-    <p className="text-2xl font-bold tracking-tight text-slate-100">{value}</p>
+    <p className="text-4xl font-black tracking-tight text-slate-100">{value}</p>
   </Card>
 );
 

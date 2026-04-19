@@ -33,6 +33,7 @@ export const MatchesListPage = () => {
   const [format, setFormat] = useState<'all' | 'amistoso' | 'entrenamiento' | 'torneo'>('all');
   const [status, setStatus] = useState<'all' | 'pendiente' | 'en_curso' | 'finalizado'>('all');
   const [playerId, setPlayerId] = useState<string>('all');
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const filters = useMemo(() => ({ from, to, format, status, playerId }), [from, to, format, status, playerId]);
 
@@ -41,7 +42,9 @@ export const MatchesListPage = () => {
 
   const playerMap = new Map((players ?? []).map((p) => [p.id, `${p.firstName} ${p.lastName}`]));
 
-  const hasFilters = from || to || format !== 'all' || status !== 'all' || playerId !== 'all';
+  const activeCount = [from, to, format !== 'all', status !== 'all', playerId !== 'all'].filter(Boolean).length;
+
+  const clearFilters = () => { setFrom(''); setTo(''); setFormat('all'); setStatus('all'); setPlayerId('all'); };
 
   return (
     <section className="page-shell space-y-4">
@@ -50,31 +53,59 @@ export const MatchesListPage = () => {
           <h1 className="page-title">Partidos</h1>
           <p className="page-subtitle">Filtra y gestiona partidos</p>
         </div>
-        <Link className="btn-primary" to="/matches/new">+ Nuevo</Link>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setFiltersOpen((v) => !v)}
+            className={`relative flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium transition ${
+              filtersOpen || activeCount > 0
+                ? 'border-brand-500/50 bg-brand-500/10 text-brand-300'
+                : 'border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800'
+            }`}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+              <path d="M3 6h18M7 12h10M11 18h2" strokeLinecap="round" />
+            </svg>
+            Filtrar
+            {activeCount > 0 && (
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-500 text-xs font-bold text-slate-950">
+                {activeCount}
+              </span>
+            )}
+          </button>
+          <Link className="btn-primary px-4 py-2.5 text-sm" to="/matches/new">+ Nuevo</Link>
+        </div>
       </div>
 
-      <Card className="card-body grid gap-3 sm:grid-cols-2 md:grid-cols-5">
-        <Input label="Desde" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-        <Input label="Hasta" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-        <Select label="Formato" value={format} onChange={(e) => setFormat(e.target.value as typeof format)}>
-          <option value="all">Todos</option>
-          <option value="amistoso">Amistoso</option>
-          <option value="entrenamiento">Entrenamiento</option>
-          <option value="torneo">Torneo</option>
-        </Select>
-        <Select label="Estado" value={status} onChange={(e) => setStatus(e.target.value as typeof status)}>
-          <option value="all">Todos</option>
-          <option value="pendiente">Pendiente</option>
-          <option value="en_curso">En curso</option>
-          <option value="finalizado">Finalizado</option>
-        </Select>
-        <Select label="Jugador" value={playerId} onChange={(e) => setPlayerId(e.target.value)}>
-          <option value="all">Todos</option>
-          {players?.map((p) => (
-            <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>
-          ))}
-        </Select>
-      </Card>
+      {filtersOpen && (
+        <Card className="card-body grid gap-3 sm:grid-cols-2 md:grid-cols-5">
+          <Input label="Desde" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          <Input label="Hasta" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          <Select label="Formato" value={format} onChange={(e) => setFormat(e.target.value as typeof format)}>
+            <option value="all">Todos</option>
+            <option value="amistoso">Amistoso</option>
+            <option value="entrenamiento">Entrenamiento</option>
+            <option value="torneo">Torneo</option>
+          </Select>
+          <Select label="Estado" value={status} onChange={(e) => setStatus(e.target.value as typeof status)}>
+            <option value="all">Todos</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="en_curso">En curso</option>
+            <option value="finalizado">Finalizado</option>
+          </Select>
+          <Select label="Jugador" value={playerId} onChange={(e) => setPlayerId(e.target.value)}>
+            <option value="all">Todos</option>
+            {players?.map((p) => (
+              <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>
+            ))}
+          </Select>
+          {activeCount > 0 && (
+            <button type="button" onClick={clearFilters} className="text-sm text-slate-400 hover:text-slate-200 text-left">
+              Limpiar filtros
+            </button>
+          )}
+        </Card>
+      )}
 
       {isLoading ? (
         <Card className="card-body">

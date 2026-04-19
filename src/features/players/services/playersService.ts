@@ -29,6 +29,7 @@ const mapPlayer = (id: string, data: Record<string, unknown>): Player => ({
   dominantHand: (data.dominantHand as Player['dominantHand']) ?? 'derecha',
   preferredSide: (data.preferredSide as Player['preferredSide']) ?? 'indistinto',
   active: Boolean(data.active ?? true),
+  anonymous: Boolean(data.anonymous ?? false),
   createdAt: toISOString(data.createdAt as string),
   updatedAt: toISOString(data.updatedAt as string)
 });

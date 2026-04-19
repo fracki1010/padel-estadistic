@@ -46,3 +46,22 @@ export const useDeactivatePlayer = () => {
     }
   });
 };
+
+export const useCreateAnonymousPlayer = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (existingAnonCount: number) =>
+      playersService.create({
+        firstName: 'Sin ID',
+        lastName: `#${existingAnonCount + 1}`,
+        nickname: '',
+        dominantHand: 'derecha',
+        preferredSide: 'indistinto',
+        active: true,
+        anonymous: true
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.players });
+    }
+  });
+};

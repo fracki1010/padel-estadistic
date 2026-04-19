@@ -43,6 +43,9 @@ const mapMatch = (id: string, data: Record<string, unknown>): Match => ({
   setsWonTeamA: Number(data.setsWonTeamA ?? 0),
   setsWonTeamB: Number(data.setsWonTeamB ?? 0),
   winner: (data.winner as Match['winner']) ?? null,
+  bestOf: (data.bestOf === 5 ? 5 : 3) as 3 | 5,
+  deuce: (data.deuce === 'oro' ? 'oro' : 'ventaja') as 'oro' | 'ventaja',
+  playerSides: data.playerSides ? (data.playerSides as Record<string, 'drive' | 'reves'>) : undefined,
   liveState: mapLiveState(data),
   createdAt: toISOString(data.createdAt as string),
   updatedAt: toISOString(data.updatedAt as string)

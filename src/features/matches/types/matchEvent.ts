@@ -43,7 +43,8 @@ export type ZoneType = 'red' | 'fondo' | 'transicion' | null;
 export type CourtZone =
   | 'fondo_izq'  | 'fondo_centro'  | 'fondo_der'
   | 'medio_izq'  | 'medio_centro'  | 'medio_der'
-  | 'red_izq'    | 'red_centro'    | 'red_der';
+  | 'red_izq'    | 'red_centro'    | 'red_der'
+  | 'lateral_izq' | 'lateral_der';
 
 export interface MatchEvent {
   id: string;

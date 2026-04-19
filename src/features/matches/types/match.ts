@@ -15,6 +15,8 @@ export interface MatchLiveState {
   updatedAt: string;
 }
 
+export type PlayerSide = 'drive' | 'reves';
+
 export interface Match extends TimestampFields {
   id: EntityId;
   date: string;
@@ -27,6 +29,9 @@ export interface Match extends TimestampFields {
   setsWonTeamA: number;
   setsWonTeamB: number;
   winner: MatchWinner;
+  bestOf?: 3 | 5;
+  deuce?: 'oro' | 'ventaja';
+  playerSides?: Record<string, PlayerSide>;
   liveState?: MatchLiveState;
 }
 

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { FirebaseError } from 'firebase/app';
-import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useCreateMatchEvent, useDeleteMatchEvent, useEventsByMatch, useMatch, useUpdateMatch } from '@/features/matches/hooks/useMatches';
 import { usePlayers } from '@/features/players/hooks/usePlayers';
@@ -13,7 +12,6 @@ import type { MatchTeam } from '@/features/matches/types/match';
 type TeamSide = MatchTeam;
 type GuidedStep = 'player' | 'result' | 'action' | 'zone' | 'tozone' | 'target';
 type GuidedOutcome = 'won' | 'lost';
-type ScoreSlide = 'sets' | 'game' | 'games';
 
 interface QuickAction {
   label: string;
@@ -50,19 +48,39 @@ const QUICK_ERROR_ACTIONS: QuickAction[] = [
   { label: 'Doble Toque', eventType: 'doble_toque', shotType: 'otro', zone: null, pointFor: 'opponent_team' }
 ];
 
-const formatPadelPoints = (pointsA: number, pointsB: number): { a: string; b: string; gameOver: TeamSide | null } => {
-  if (pointsA >= 4 || pointsB >= 4) {
-    const diff = pointsA - pointsB;
-    if (Math.abs(diff) >= 2) {
-      return { a: diff > 0 ? 'G' : '40', b: diff < 0 ? 'G' : '40', gameOver: diff > 0 ? 'equipoA' : 'equipoB' };
-    }
-    if (diff === 1) return { a: 'AD', b: '40', gameOver: null };
-    if (diff === -1) return { a: '40', b: 'AD', gameOver: null };
-    return { a: '40', b: '40', gameOver: null };
+const formatPadelPoints = (pointsA: number, pointsB: number, deuce: 'oro' | 'ventaja'): { a: string; b: string; gameOver: TeamSide | null } => {
+  const map = ['0', '15', '30', '40'];
+
+  if (pointsA < 4 && pointsB < 4) {
+    return { a: map[pointsA], b: map[pointsB], gameOver: null };
   }
 
-  const map = ['0', '15', '30', '40'];
-  return { a: map[Math.min(pointsA, 3)], b: map[Math.min(pointsB, 3)], gameOver: null };
+  if (deuce === 'oro') {
+    // 40-40: immediate decisive point
+    if (pointsA === pointsB) return { a: '40', b: '40', gameOver: null };
+    const winner = pointsA > pointsB ? 'equipoA' : 'equipoB';
+    return { a: pointsA > pointsB ? 'G' : '40', b: pointsB > pointsA ? 'G' : '40', gameOver: winner };
+  }
+
+  // Ventaja mode (FIP 2026):
+  // 1st deuce → AD → 2nd deuce → AD → SP-SP → winner
+  const diff = pointsA - pointsB;
+  const minPts = Math.min(pointsA, pointsB);
+
+  if (minPts >= 5) {
+    // SP-SP territory
+    if (diff === 0) return { a: 'SP', b: 'SP', gameOver: null };
+    const winner = diff > 0 ? 'equipoA' : 'equipoB';
+    return { a: diff > 0 ? 'G' : '40', b: diff < 0 ? 'G' : '40', gameOver: winner };
+  }
+
+  if (Math.abs(diff) >= 2) {
+    const winner = diff > 0 ? 'equipoA' : 'equipoB';
+    return { a: diff > 0 ? 'G' : '40', b: diff < 0 ? 'G' : '40', gameOver: winner };
+  }
+  if (diff === 1)  return { a: 'AD', b: '40', gameOver: null };
+  if (diff === -1) return { a: '40', b: 'AD', gameOver: null };
+  return { a: '40', b: '40', gameOver: null };
 };
 
 export const MatchEventsPage = () => {
@@ -92,13 +110,12 @@ export const MatchEventsPage = () => {
   const [pendingAction, setPendingAction] = useState<QuickAction | null>(null);
   const [courtZone, setCourtZone] = useState<CourtZone | null>(null);
   const [toZone, setToZone] = useState<CourtZone | null>(null);
-  const [scoreSlide, setScoreSlide] = useState<ScoreSlide>('game');
 
   const [saveError, setSaveError] = useState<string | null>(null);
   const [recentFeedback, setRecentFeedback] = useState<string | null>(null);
-
   const [pendingGameWinner, setPendingGameWinner] = useState<TeamSide | null>(null);
   const [notifiedGameKey, setNotifiedGameKey] = useState<string | null>(null);
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
 
   const playerMap = new Map((players ?? []).map((player) => [player.id, `${player.firstName} ${player.lastName}`]));
   const abbr = (pid: string) => (playerMap.get(pid)?.split(' ')[0] ?? '?').slice(0, 3).toUpperCase();
@@ -146,7 +163,7 @@ export const MatchEventsPage = () => {
   const currentGamePointsA = eventsInCurrentGame.filter((event) => event.winningTeam === 'equipoA').length;
   const currentGamePointsB = eventsInCurrentGame.filter((event) => event.winningTeam === 'equipoB').length;
   const isTieBreak = gamesInSetA === 6 && gamesInSetB === 6;
-  const padelPoints = formatPadelPoints(currentGamePointsA, currentGamePointsB);
+  const padelPoints = formatPadelPoints(currentGamePointsA, currentGamePointsB, match?.deuce ?? 'ventaja');
   const autoGameWinner = !isTieBreak ? padelPoints.gameOver : null;
   const currentGameKey = `${setNumber}-${gameNumber}`;
 
@@ -184,8 +201,20 @@ export const MatchEventsPage = () => {
   };
 
   const closeSetAndStartNext = (winnerTeam: TeamSide) => {
-    setSetsWonTeamA((prev) => prev + (winnerTeam === 'equipoA' ? 1 : 0));
-    setSetsWonTeamB((prev) => prev + (winnerTeam === 'equipoB' ? 1 : 0));
+    const newSetsA = setsWonTeamA + (winnerTeam === 'equipoA' ? 1 : 0);
+    const newSetsB = setsWonTeamB + (winnerTeam === 'equipoB' ? 1 : 0);
+    setSetsWonTeamA(newSetsA);
+    setSetsWonTeamB(newSetsB);
+
+    const setsToWin = Math.ceil((match?.bestOf ?? 3) / 2);
+    if (newSetsA >= setsToWin || newSetsB >= setsToWin) {
+      updateMatch.mutate({
+        id: match!.id,
+        input: { status: 'finalizado', winner: winnerTeam }
+      });
+      return;
+    }
+
     setSetNumber((prev) => prev + 1);
     setGamesInSetA(0);
     setGamesInSetB(0);
@@ -298,10 +327,6 @@ export const MatchEventsPage = () => {
   }, [autoGameWinner, currentGameKey, notifiedGameKey]);
 
   useEffect(() => {
-    setScoreSlide('game');
-  }, [setNumber, gameNumber, pointNumber, currentGamePointsA, currentGamePointsB, gamesInSetA, gamesInSetB]);
-
-  useEffect(() => {
     return () => {
       if (cycleTimeoutRef.current !== null) {
         window.clearTimeout(cycleTimeoutRef.current);
@@ -309,7 +334,7 @@ export const MatchEventsPage = () => {
     };
   }, []);
 
-  const saveEvent = async (action: QuickAction, targetPlayerId?: string): Promise<boolean> => {
+  const saveEvent = async (action: QuickAction, targetPlayerId?: string, overrideCourtZone?: CourtZone | null): Promise<boolean> => {
     if (!match || !playerId || !selectedPlayerTeam) return false;
 
     const winningTeam = inferWinningTeam(selectedPlayerTeam, action.pointFor);
@@ -327,7 +352,7 @@ export const MatchEventsPage = () => {
         eventType: action.eventType,
         shotType: action.shotType,
         zone: action.zone,
-        courtZone: courtZone ?? undefined,
+        courtZone: (overrideCourtZone !== undefined ? overrideCourtZone : courtZone) ?? undefined,
         toZone: toZone ?? undefined,
         targetPlayerId,
         notes: ''
@@ -383,151 +408,14 @@ export const MatchEventsPage = () => {
     await deleteEvent.mutateAsync(last.id);
   };
 
-  const goToPrevScoreSlide = () => {
-    setScoreSlide((prev) => {
-      if (prev === 'sets') return 'games';
-      if (prev === 'game') return 'sets';
-      return 'game';
-    });
-  };
-
-  const goToNextScoreSlide = () => {
-    setScoreSlide((prev) => {
-      if (prev === 'sets') return 'game';
-      if (prev === 'game') return 'games';
-      return 'sets';
-    });
-  };
-
   if (!match) {
     return <section className="page-shell">Partido no encontrado.</section>;
   }
 
   return (
-    <section className="page-shell box-border flex h-full min-h-0 w-full min-w-0 max-w-full flex-col gap-3 overflow-hidden overflow-x-hidden">
-      <div className="min-w-0 shrink-0 space-y-2">
-        <div className="flex min-w-0 items-center justify-between gap-2">
-          <div className="min-w-0">
-            <h1 className="page-title">Modo Partido</h1>
-            <p className="page-subtitle">Pantalla fija, foco total en el punto</p>
-          </div>
-          <Button variant="secondary" onClick={undoLast} className="shrink-0">
-            Deshacer
-          </Button>
-        </div>
-
-        <Card className="card-body p-3">
-          <div className="space-y-2">
-            <div className="rounded-xl border border-slate-700 bg-slate-900/80 p-2.5">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs uppercase tracking-wide text-slate-400">Marcador en vivo</p>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={goToPrevScoreSlide}
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-700 bg-slate-900 text-slate-200"
-                    aria-label="Slide anterior"
-                  >
-                    ‹
-                  </button>
-                  <button
-                    type="button"
-                    onClick={goToNextScoreSlide}
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-700 bg-slate-900 text-slate-200"
-                    aria-label="Siguiente slide"
-                  >
-                    ›
-                  </button>
-                </div>
-              </div>
-              <div className="mt-2 overflow-hidden rounded-lg border border-slate-700 bg-slate-900">
-                <div
-                  className={`flex w-[300%] transition-transform duration-200 ${
-                    scoreSlide === 'sets' ? 'translate-x-0' : scoreSlide === 'game' ? '-translate-x-1/3' : '-translate-x-2/3'
-                  }`}
-                >
-                  <div className="w-1/3 p-2.5 text-center">
-                    <p className="text-xs text-slate-400">Sets</p>
-                    <p className="text-2xl font-semibold text-slate-100">{setsWonTeamA} - {setsWonTeamB}</p>
-                    <p className="text-[10px] text-slate-400">{scoreLabel}</p>
-                  </div>
-                  <div className="w-1/3 p-2.5 text-center">
-                    <p className="text-xs text-slate-400">Juego actual</p>
-                    <p className="text-2xl font-semibold text-slate-100">
-                      {isTieBreak ? `${currentGamePointsA} - ${currentGamePointsB}` : `${padelPoints.a} - ${padelPoints.b}`}
-                    </p>
-                    <p className="text-[10px] text-slate-400">{scoreLabel}</p>
-                  </div>
-                  <div className="w-1/3 p-2.5 text-center">
-                    <p className="text-xs text-slate-400">Games del set</p>
-                    <p className="text-2xl font-semibold text-slate-100">{gamesInSetA} - {gamesInSetB}</p>
-                    <p className="text-[10px] text-slate-400">{scoreLabel}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="mt-2 flex items-center justify-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setScoreSlide('sets')}
-                  className={`h-2.5 w-2.5 rounded-full ${scoreSlide === 'sets' ? 'bg-brand-400' : 'bg-slate-600'}`}
-                  aria-label="Ver sets"
-                />
-                <button
-                  type="button"
-                  onClick={() => setScoreSlide('game')}
-                  className={`h-2.5 w-2.5 rounded-full ${scoreSlide === 'game' ? 'bg-brand-400' : 'bg-slate-600'}`}
-                  aria-label="Ver juego actual"
-                />
-                <button
-                  type="button"
-                  onClick={() => setScoreSlide('games')}
-                  className={`h-2.5 w-2.5 rounded-full ${scoreSlide === 'games' ? 'bg-brand-400' : 'bg-slate-600'}`}
-                  aria-label="Ver games del set"
-                />
-              </div>
-              <p className="mt-2 break-words text-xs text-slate-400">
-                Set {setNumber} · Game {gameNumber} · Punto {pointNumber} · Saca {serverPlayerName} ({serverTeam === 'equipoA' ? 'A' : serverTeam === 'equipoB' ? 'B' : '-'})
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <Button variant="secondary" onClick={rotateServerByPlayer}>Cambio de saque</Button>
-              <Button variant="secondary" onClick={startGuidedCycle}>Nuevo punto</Button>
-              {autoGameWinner ? (
-                <Button variant="primary" onClick={() => closeGame(autoGameWinner)} className="col-span-2">
-                  Cerrar game automático ({autoGameWinner === 'equipoA' ? 'A' : 'B'})
-                </Button>
-              ) : null}
-              {isTieBreak ? (
-                <Button
-                  variant="primary"
-                  onClick={() => closeTieBreak(currentGamePointsA > currentGamePointsB ? 'equipoA' : 'equipoB')}
-                  className="col-span-2"
-                  disabled={currentGamePointsA === currentGamePointsB}
-                >
-                  Cerrar tie-break
-                </Button>
-              ) : null}
-            </div>
-
-            <div className="rounded-lg border border-slate-700 bg-slate-900 p-2.5">
-              <p className="text-xs uppercase tracking-wide text-slate-400">Estado del ciclo</p>
-              <p className="mt-1 text-xs text-slate-200">
-                {guidedStep === 'player'  ? '1) Selecciona jugador'
-                  : guidedStep === 'result' ? `2) ${selectedPlayerName ?? '-'}: ¿ganó o perdió?`
-                  : guidedStep === 'action' ? `3) Acción de ${selectedPlayerName ?? '-'}`
-                  : guidedStep === 'zone'   ? `4) ¿Desde dónde?`
-                  : guidedStep === 'tozone' ? `5) ¿A qué zona fue?`
-                  :                          `6) ¿A quién iba dirigido?`}
-              </p>
-              {recentFeedback ? <p className="mt-1 text-xs text-brand-300">Último: {recentFeedback}</p> : null}
-              {saveError ? <p className="mt-1 text-xs text-red-300">{saveError}</p> : null}
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden rounded-xl border border-slate-700 bg-slate-950/98 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur">
+    <section className="page-shell box-border relative flex h-full min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden overflow-x-hidden">
+      {/* Main content — full height, extra top padding so floating elements don't cover content */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden rounded-xl border border-slate-700 bg-slate-950/98 p-3 pt-20 backdrop-blur">
         <div className="flex h-full w-full min-h-0 min-w-0 flex-col">
           {guidedStep === 'player' ? (
             <div className="flex h-full w-full min-h-0 flex-col gap-2">
@@ -543,13 +431,18 @@ export const MatchEventsPage = () => {
                     }}
                     className="h-full min-w-0 rounded-lg border border-slate-700 bg-slate-900 px-3 py-3 text-center text-base hover:border-brand-500"
                   >
-                    <p className="break-words font-semibold text-slate-100">{player.firstName} {player.lastName}</p>
+                    <p className="break-words font-semibold text-slate-100">
+                      {player.anonymous ? `? ${player.lastName}` : `${player.firstName} ${player.lastName}`}
+                    </p>
                     <p className="text-xs text-slate-400">{teamByPlayer.get(player.id) === 'equipoA' ? 'Equipo A' : 'Equipo B'}</p>
-                    {player.preferredSide !== 'indistinto' && (
-                      <p className={`mt-0.5 text-xs font-medium ${player.preferredSide === 'drive' ? 'text-sky-400' : 'text-violet-400'}`}>
-                        {player.preferredSide === 'drive' ? 'Drive' : 'Revés'}
-                      </p>
-                    )}
+                    {(() => {
+                      const side = match.playerSides?.[player.id] ?? (player.preferredSide !== 'indistinto' ? player.preferredSide : null);
+                      return side ? (
+                        <p className={`mt-0.5 text-xs font-medium ${side === 'drive' ? 'text-sky-400' : 'text-violet-400'}`}>
+                          {side === 'drive' ? 'Drive' : 'Revés'}
+                        </p>
+                      ) : null;
+                    })()}
                   </button>
                 ))}
               </div>
@@ -647,14 +540,25 @@ export const MatchEventsPage = () => {
                   selected={courtZone}
                   onSelect={(z) => {
                     setCourtZone(z);
-                    setGuidedStep('tozone');
+                    if (guidedOutcome === 'lost') {
+                      if (pendingAction) void saveEvent(pendingAction, undefined, z);
+                    } else {
+                      setGuidedStep('tozone');
+                    }
                   }}
                 />
               </div>
               <Button
                 variant="secondary"
                 className="w-full"
-                onClick={() => { setCourtZone(null); setGuidedStep('tozone'); }}
+                onClick={() => {
+                  setCourtZone(null);
+                  if (guidedOutcome === 'lost') {
+                    if (pendingAction) void saveEvent(pendingAction);
+                  } else {
+                    setGuidedStep('tozone');
+                  }
+                }}
               >
                 Omitir (sin zona)
               </Button>
@@ -730,8 +634,154 @@ export const MatchEventsPage = () => {
         </div>
       </div>
 
+      {/* Floating game score badge — top-right corner */}
+      <div className="fixed top-4 right-4 z-30 min-w-[72px] rounded-2xl border border-slate-600 bg-slate-900/95 px-4 py-3 text-center shadow-2xl backdrop-blur-sm">
+        <p className="text-[9px] font-semibold uppercase tracking-widest text-slate-500">Game</p>
+        <p className="text-5xl font-black leading-none tabular-nums text-slate-100">
+          {isTieBreak ? currentGamePointsA : padelPoints.a}
+        </p>
+        <div className="my-1 h-px w-full bg-slate-700" />
+        <p className="text-5xl font-black leading-none tabular-nums text-slate-100">
+          {isTieBreak ? currentGamePointsB : padelPoints.b}
+        </p>
+      </div>
+
+      {/* Floating actions button — top-left corner */}
+      <button
+        type="button"
+        onClick={() => setShowActionsMenu(true)}
+        className="fixed top-4 left-4 z-30 flex items-center gap-1.5 rounded-full border border-slate-600 bg-slate-800/95 px-4 py-2.5 text-sm font-semibold text-slate-200 shadow-xl backdrop-blur-sm hover:bg-slate-700 active:scale-95"
+      >
+        <svg viewBox="0 0 20 20" className="h-4 w-4 fill-current" aria-hidden="true">
+          <circle cx="4" cy="10" r="1.5" />
+          <circle cx="10" cy="10" r="1.5" />
+          <circle cx="16" cy="10" r="1.5" />
+        </svg>
+        Acciones
+      </button>
+
+      {/* Actions bottom sheet */}
+      {showActionsMenu ? (
+        <div
+          className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 pb-6"
+          onClick={() => setShowActionsMenu(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-base font-semibold text-slate-100">Acciones</h3>
+              <button
+                type="button"
+                onClick={() => setShowActionsMenu(false)}
+                className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-700 text-slate-400 hover:text-slate-200"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Full scoreboard */}
+            <div className="mb-3 rounded-xl border border-slate-700 bg-slate-950 p-3">
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-slate-500">Marcador</p>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div>
+                  <p className="text-[10px] text-slate-500">Sets</p>
+                  <p className="text-3xl font-black tabular-nums text-slate-100">{setsWonTeamA} - {setsWonTeamB}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-500">Game</p>
+                  <p className="text-3xl font-black tabular-nums text-slate-100">
+                    {isTieBreak ? `${currentGamePointsA}-${currentGamePointsB}` : `${padelPoints.a}-${padelPoints.b}`}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-500">Games</p>
+                  <p className="text-3xl font-black tabular-nums text-slate-100">{gamesInSetA} - {gamesInSetB}</p>
+                </div>
+              </div>
+              <p className="mt-2 text-[10px] text-slate-500">
+                {scoreLabel} · Set {setNumber} · Game {gameNumber} · Punto {pointNumber}
+              </p>
+              <p className="text-[10px] text-slate-500">
+                Saca {serverPlayerName} ({serverTeam === 'equipoA' ? 'A' : serverTeam === 'equipoB' ? 'B' : '-'})
+              </p>
+            </div>
+
+            {/* Cycle state */}
+            <div className="mb-3 rounded-lg border border-slate-700 bg-slate-950 p-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Estado del ciclo</p>
+              <p className="mt-1 text-xs text-slate-200">
+                {guidedStep === 'player'  ? '1) Selecciona jugador'
+                  : guidedStep === 'result' ? `2) ${selectedPlayerName ?? '-'}: ¿ganó o perdió?`
+                  : guidedStep === 'action' ? `3) Acción de ${selectedPlayerName ?? '-'}`
+                  : guidedStep === 'zone'   ? `4) ¿Desde dónde?`
+                  : guidedStep === 'tozone' ? `5) ¿A qué zona fue?`
+                  :                          `6) ¿A quién iba dirigido?`}
+              </p>
+              {recentFeedback ? <p className="mt-1 text-xs text-brand-300">Último: {recentFeedback}</p> : null}
+              {saveError ? <p className="mt-1 text-xs text-red-300">{saveError}</p> : null}
+            </div>
+
+            {/* Action buttons */}
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="secondary" onClick={() => { void undoLast(); setShowActionsMenu(false); }}>
+                Deshacer
+              </Button>
+              <Button variant="secondary" onClick={() => { rotateServerByPlayer(); setShowActionsMenu(false); }}>
+                Cambio de saque
+              </Button>
+              <Button variant="secondary" className="col-span-2" onClick={() => { startGuidedCycle(); setShowActionsMenu(false); }}>
+                Nuevo punto
+              </Button>
+              {!isTieBreak ? (
+                <>
+                  <Button
+                    variant="secondary"
+                    onClick={() => { closeGame('equipoA'); setShowActionsMenu(false); }}
+                  >
+                    Terminar game A
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => { closeGame('equipoB'); setShowActionsMenu(false); }}
+                  >
+                    Terminar game B
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    variant="secondary"
+                    onClick={() => { closeTieBreak('equipoA'); setShowActionsMenu(false); }}
+                  >
+                    Tie-break A
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => { closeTieBreak('equipoB'); setShowActionsMenu(false); }}
+                  >
+                    Tie-break B
+                  </Button>
+                </>
+              )}
+              {autoGameWinner ? (
+                <Button
+                  variant="primary"
+                  className="col-span-2"
+                  onClick={() => { closeGame(autoGameWinner); setShowActionsMenu(false); }}
+                >
+                  Cerrar game automático ({autoGameWinner === 'equipoA' ? 'A' : 'B'})
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Pending game winner modal */}
       {pendingGameWinner ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-2xl">
             <p className="text-xs uppercase tracking-wide text-amber-300">Game finalizado</p>
             <h3 className="mt-1 text-lg font-semibold text-slate-100">

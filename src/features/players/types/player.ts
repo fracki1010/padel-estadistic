@@ -11,6 +11,7 @@ export interface Player extends TimestampFields {
   dominantHand: DominantHand;
   preferredSide: PreferredSide;
   active: boolean;
+  anonymous?: boolean;
 }
 
 export type CreatePlayerInput = Omit<Player, 'id' | 'createdAt' | 'updatedAt'>;

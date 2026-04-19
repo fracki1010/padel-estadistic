@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useDeactivatePlayer, usePlayers } from '@/features/players/hooks/usePlayers';
+import { useCreateAnonymousPlayer, useDeactivatePlayer, usePlayers } from '@/features/players/hooks/usePlayers';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -15,27 +15,37 @@ const SIDE_COLOR: Record<string, string> = {
   indistinto: 'text-slate-400'
 };
 
-const Avatar = ({ firstName, lastName, active }: { firstName: string; lastName: string; active: boolean }) => (
+const Avatar = ({ firstName, lastName, active, anonymous }: { firstName: string; lastName: string; active: boolean; anonymous?: boolean }) => (
   <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
-    active ? 'bg-brand-500/20 text-brand-300' : 'bg-slate-700 text-slate-400'
+    anonymous ? 'bg-slate-700/60 text-slate-400 ring-1 ring-slate-600 ring-dashed'
+    : active ? 'bg-brand-500/20 text-brand-300' : 'bg-slate-700 text-slate-400'
   }`}>
-    {firstName[0]}{lastName[0]}
+    {anonymous ? '?' : `${firstName[0]}${lastName[0]}`}
   </div>
 );
 
 export const PlayersListPage = () => {
   const { data: players, isLoading } = usePlayers(false);
   const deactivate = useDeactivatePlayer();
-  const [filter, setFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const createAnon = useCreateAnonymousPlayer();
+  const [filter, setFilter] = useState<'all' | 'active' | 'inactive' | 'anon'>('all');
 
   const handleDeactivate = async (id: string) => {
     if (!confirm('¿Desactivar jugador?')) return;
     await deactivate.mutateAsync(id);
   };
 
-  const filtered = (players ?? []).filter((p) =>
-    filter === 'all' ? true : filter === 'active' ? p.active : !p.active
-  );
+  const handleCreateAnon = async () => {
+    const anonCount = (players ?? []).filter((p) => p.anonymous).length;
+    await createAnon.mutateAsync(anonCount);
+  };
+
+  const filtered = (players ?? []).filter((p) => {
+    if (filter === 'all') return true;
+    if (filter === 'active') return p.active && !p.anonymous;
+    if (filter === 'inactive') return !p.active;
+    return p.anonymous;
+  });
 
   return (
     <section className="page-shell space-y-4">
@@ -44,12 +54,21 @@ export const PlayersListPage = () => {
           <h1 className="page-title">Jugadores</h1>
           <p className="page-subtitle">Gestiona la base de jugadores</p>
         </div>
-        <Link to="/players/new" className="btn-primary">+ Nuevo</Link>
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            onClick={handleCreateAnon}
+            loading={createAnon.isPending}
+          >
+            + Sin identificar
+          </Button>
+          <Link to="/players/new" className="btn-primary">+ Nuevo</Link>
+        </div>
       </div>
 
       {/* Filtro rápido */}
       <div className="flex gap-2">
-        {(['all', 'active', 'inactive'] as const).map((f) => (
+        {(['all', 'active', 'inactive', 'anon'] as const).map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
@@ -59,7 +78,7 @@ export const PlayersListPage = () => {
                 : 'border-slate-700 bg-slate-900 text-slate-400 hover:text-slate-200'
             }`}
           >
-            {f === 'all' ? 'Todos' : f === 'active' ? 'Activos' : 'Inactivos'}
+            {f === 'all' ? 'Todos' : f === 'active' ? 'Activos' : f === 'inactive' ? 'Inactivos' : 'Sin ID'}
           </button>
         ))}
       </div>
@@ -83,15 +102,17 @@ export const PlayersListPage = () => {
             {filtered.map((player) => (
               <Card key={player.id}>
                 <div className="flex items-center gap-3 p-3">
-                  <Avatar firstName={player.firstName} lastName={player.lastName} active={player.active} />
+                  <Avatar firstName={player.firstName} lastName={player.lastName} active={player.active} anonymous={player.anonymous} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <p className="truncate font-semibold text-slate-100">
                         {player.firstName} {player.lastName}
                       </p>
-                      {player.active
-                        ? <Badge color="green">Activo</Badge>
-                        : <Badge color="red">Inactivo</Badge>
+                      {player.anonymous
+                        ? <Badge color="slate">Sin ID</Badge>
+                        : player.active
+                          ? <Badge color="green">Activo</Badge>
+                          : <Badge color="red">Inactivo</Badge>
                       }
                     </div>
                     {player.nickname && (
@@ -137,7 +158,7 @@ export const PlayersListPage = () => {
                   <tr key={player.id} className="border-t border-slate-800 transition-colors hover:bg-slate-800/30">
                     <td className="td">
                       <div className="flex items-center gap-3">
-                        <Avatar firstName={player.firstName} lastName={player.lastName} active={player.active} />
+                        <Avatar firstName={player.firstName} lastName={player.lastName} active={player.active} anonymous={player.anonymous} />
                         <div>
                           <p className="font-semibold text-slate-100">{player.firstName} {player.lastName}</p>
                           {player.nickname && (
@@ -155,9 +176,11 @@ export const PlayersListPage = () => {
                       </span>
                     </td>
                     <td className="td">
-                      {player.active
-                        ? <Badge color="green">Activo</Badge>
-                        : <Badge color="red">Inactivo</Badge>
+                      {player.anonymous
+                        ? <Badge color="slate">Sin ID</Badge>
+                        : player.active
+                          ? <Badge color="green">Activo</Badge>
+                          : <Badge color="red">Inactivo</Badge>
                       }
                     </td>
                     <td className="td">

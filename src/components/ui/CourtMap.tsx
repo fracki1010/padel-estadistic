@@ -10,40 +10,56 @@ const HALF_H  = FONDO_H + MEDIO_H + RED_H; // 150
 const NET_H   = 14;
 const FULL_H  = HALF_H * 2 + NET_H;        // 314
 
+// Lateral (exterior) wall zones
+const LAT_W   = 14;   // width of each lateral column
+const LAT_GAP = 4;    // gap between court edge and lateral rect
+
 const ROW_HEIGHTS: [number, number, number] = [FONDO_H, MEDIO_H, RED_H];
 const ROW_Y:       [number, number, number] = [0, FONDO_H, FONDO_H + MEDIO_H];
 
-const ZONE_ROW: Record<CourtZone, 0 | 1 | 2> = {
+const GRID_ZONES = [
+  'fondo_izq', 'fondo_centro', 'fondo_der',
+  'medio_izq', 'medio_centro', 'medio_der',
+  'red_izq',   'red_centro',   'red_der',
+] as const;
+type GridZone = typeof GRID_ZONES[number];
+
+const ZONE_ROW: Record<GridZone, 0 | 1 | 2> = {
   fondo_izq: 0, fondo_centro: 0, fondo_der: 0,
   medio_izq: 1, medio_centro: 1, medio_der: 1,
   red_izq:   2, red_centro:   2, red_der:   2,
 };
-const ZONE_COL: Record<CourtZone, 0 | 1 | 2> = {
+const ZONE_COL: Record<GridZone, 0 | 1 | 2> = {
   fondo_izq: 0, fondo_centro: 1, fondo_der: 2,
   medio_izq: 0, medio_centro: 1, medio_der: 2,
   red_izq:   0, red_centro:   1, red_der:   2,
 };
 
 export const COURT_ZONES: CourtZone[] = [
-  'fondo_izq', 'fondo_centro', 'fondo_der',
-  'medio_izq', 'medio_centro', 'medio_der',
-  'red_izq',   'red_centro',   'red_der',
+  ...GRID_ZONES,
+  'lateral_izq', 'lateral_der',
 ];
+
+const isGrid = (z: CourtZone): z is GridZone => GRID_ZONES.includes(z as GridZone);
 
 const ZONE_SHORT: Record<CourtZone, string> = {
   fondo_izq: 'IZQ', fondo_centro: 'CTR', fondo_der: 'DER',
   medio_izq: 'IZQ', medio_centro: 'CTR', medio_der: 'DER',
   red_izq:   'IZQ', red_centro:   'CTR', red_der:   'DER',
+  lateral_izq: 'IZQ', lateral_der: 'DER',
 };
 
-const halfBounds = (zone: CourtZone) => ({
-  x: ZONE_COL[zone] * COL_W,
-  y: ROW_Y[ZONE_ROW[zone]],
-  w: COL_W,
-  h: ROW_HEIGHTS[ZONE_ROW[zone]],
-});
+const halfBounds = (zone: CourtZone) => {
+  if (!isGrid(zone)) return { x: zone === 'lateral_izq' ? -(LAT_W + LAT_GAP) : CW + LAT_GAP, y: 0, w: LAT_W, h: HALF_H };
+  return { x: ZONE_COL[zone] * COL_W, y: ROW_Y[ZONE_ROW[zone]], w: COL_W, h: ROW_HEIGHTS[ZONE_ROW[zone]] };
+};
 
 const fullBounds = (zone: CourtZone, team: 'A' | 'B') => {
+  if (!isGrid(zone)) {
+    const x = zone === 'lateral_izq' ? -(LAT_W + LAT_GAP) : CW + LAT_GAP;
+    const y = team === 'A' ? 0 : HALF_H + NET_H;
+    return { x, y, w: LAT_W, h: HALF_H };
+  }
   const row  = ZONE_ROW[zone];
   const x    = ZONE_COL[zone] * COL_W;
   if (team === 'A') {
@@ -54,23 +70,45 @@ const fullBounds = (zone: CourtZone, team: 'A' | 'B') => {
   return { x, y: bRowY[row], w: COL_W, h: ROW_HEIGHTS[row] };
 };
 
+/**
+ * Converts a zone recorded from a player's perspective to the fixed overhead
+ * view perspective (IZQ = west/left of court, DER = east/right of court).
+ *
+ * The diagram has Team A at the TOP facing south. When Team A faces south,
+ * their right hand = west = LEFT column of the diagram. So their DER/IZQ
+ * labels are mirrored relative to the overhead column order.
+ * Team B faces north, so their IZQ/DER matches the overhead column order directly.
+ */
+export const toOverheadZone = (zone: CourtZone, playerTeam: 'A' | 'B'): CourtZone => {
+  if (playerTeam === 'B') return zone;
+  // Team A faces south → their IZQ/DER is mirrored from the overhead column order
+  if (!isGrid(zone)) {
+    return zone === 'lateral_izq' ? 'lateral_der' : 'lateral_izq';
+  }
+  const mirroredCol = 2 - ZONE_COL[zone];
+  return COURT_ZONES.find((z) => isGrid(z) && ZONE_ROW[z] === ZONE_ROW[zone] && ZONE_COL[z] === mirroredCol)!;
+};
+
 // ---------- CourtZonePicker ----------
 // flip=true  → net arriba  (paso "¿Desde dónde?": jugador abajo, red en frente arriba)
 // flip=false → net abajo   (paso "¿A qué zona fue?": vista de cancha rival normal)
 
 const pickerZoneBounds = (zone: CourtZone, flip: boolean) => {
-  const col  = ZONE_COL[zone];
-  const row  = ZONE_ROW[zone]; // 0=fondo, 1=medio, 2=red
-  const x    = col * COL_W;
+  const courtY = flip ? NET_H : 0;
+  if (!isGrid(zone)) {
+    const x = zone === 'lateral_izq' ? -(LAT_W + LAT_GAP) : CW + LAT_GAP;
+    return { x, y: courtY, w: LAT_W, h: HALF_H };
+  }
+  const col = ZONE_COL[zone];
+  const row = ZONE_ROW[zone];
+  const x   = col * COL_W;
   if (!flip) {
-    // normal: fondo arriba, red abajo, net bar al final
     return { x, y: ROW_Y[row], w: COL_W, h: ROW_HEIGHTS[row] };
   }
-  // flipped: net bar arriba, red justo debajo, medio, fondo al fondo
   const flippedRowY: [number, number, number] = [
-    NET_H + RED_H + MEDIO_H, // fondo (row 0) → más abajo
-    NET_H + RED_H,            // medio (row 1)
-    NET_H,                    // red   (row 2) → justo bajo la red
+    NET_H + RED_H + MEDIO_H,
+    NET_H + RED_H,
+    NET_H,
   ];
   return { x, y: flippedRowY[row], w: COL_W, h: ROW_HEIGHTS[row] };
 };
@@ -91,14 +129,20 @@ export const CourtZonePicker = ({
   const h1Y   = flip ? NET_H + RED_H           : FONDO_H;
   const h2Y   = flip ? NET_H + RED_H + MEDIO_H : FONDO_H + MEDIO_H;
 
+  const SIDE = LAT_W + LAT_GAP;
+
   return (
     <svg
-      viewBox={`0 0 ${CW} ${HALF_H + NET_H}`}
-      className="w-full max-w-[240px] mx-auto rounded-xl overflow-hidden select-none"
+      viewBox={`${-SIDE} 0 ${CW + 2 * SIDE} ${HALF_H + NET_H}`}
+      className="w-full max-w-[280px] mx-auto rounded-xl overflow-visible select-none"
       style={{ touchAction: 'manipulation' }}
     >
       {/* court surface */}
       <rect x={0} y={courtY} width={CW} height={HALF_H} fill="#1b5e35" />
+
+      {/* lateral wall surfaces */}
+      <rect x={-(SIDE)} y={courtY} width={LAT_W} height={HALF_H} fill="#2a3a4a" rx={2} />
+      <rect x={CW + LAT_GAP} y={courtY} width={LAT_W} height={HALF_H} fill="#2a3a4a" rx={2} />
 
       {title && (
         <text x={CW / 2} y={-4} textAnchor="middle" fontSize={7}
@@ -110,24 +154,40 @@ export const CourtZonePicker = ({
         const cx  = x + w / 2;
         const cy  = y + h / 2;
         const sel = selected === zone;
-        const rowLabel = (['FONDO', 'MEDIO', 'RED'] as const)[ZONE_ROW[zone]];
+        const isLat = !isGrid(zone);
+        const rowLabel = isLat ? 'EXT' : (['FONDO', 'MEDIO', 'RED'] as const)[ZONE_ROW[zone as GridZone]];
         return (
           <g key={zone} onClick={() => onSelect(zone)} style={{ cursor: 'pointer' }}>
             <rect
-              x={x + 2} y={y + 2} width={w - 4} height={h - 4}
-              fill={sel ? 'rgba(59,130,246,0.60)' : 'rgba(255,255,255,0.06)'}
-              stroke={sel ? '#93c5fd' : 'rgba(255,255,255,0.22)'}
+              x={x + 1} y={y + 1} width={w - 2} height={h - 2}
+              fill={sel ? 'rgba(59,130,246,0.65)' : isLat ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.06)'}
+              stroke={sel ? '#93c5fd' : isLat ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.22)'}
               strokeWidth={sel ? 1.5 : 1}
-              rx={3}
+              strokeDasharray={isLat && !sel ? '3 2' : undefined}
+              rx={isLat ? 2 : 3}
             />
-            <text x={cx} y={cy - 5} textAnchor="middle" dominantBaseline="middle"
-              fontSize={9} fontWeight={sel ? '700' : '500'}
-              fill={sel ? 'white' : 'rgba(255,255,255,0.85)'}
-              fontFamily="system-ui,sans-serif">{rowLabel}</text>
-            <text x={cx} y={cy + 7} textAnchor="middle" dominantBaseline="middle"
-              fontSize={7}
-              fill={sel ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.5)'}
-              fontFamily="system-ui,sans-serif">{ZONE_SHORT[zone]}</text>
+            {isLat ? (
+              <text
+                x={cx} y={cy} textAnchor="middle" dominantBaseline="middle"
+                fontSize={6} fontWeight={sel ? '700' : '500'}
+                fill={sel ? 'white' : 'rgba(255,255,255,0.55)'}
+                fontFamily="system-ui,sans-serif"
+                transform={`rotate(-90,${cx},${cy})`}
+              >
+                EXT
+              </text>
+            ) : (
+              <>
+                <text x={cx} y={cy - 5} textAnchor="middle" dominantBaseline="middle"
+                  fontSize={9} fontWeight={sel ? '700' : '500'}
+                  fill={sel ? 'white' : 'rgba(255,255,255,0.85)'}
+                  fontFamily="system-ui,sans-serif">{rowLabel}</text>
+                <text x={cx} y={cy + 7} textAnchor="middle" dominantBaseline="middle"
+                  fontSize={7}
+                  fill={sel ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.5)'}
+                  fontFamily="system-ui,sans-serif">{ZONE_SHORT[zone]}</text>
+              </>
+            )}
           </g>
         );
       })}
@@ -180,14 +240,17 @@ export const CourtHeatmap = ({
   const countA = new Map<CourtZone, number>();
   const countB = new Map<CourtZone, number>();
   relevant.forEach((e) => {
+    const pt: 'A' | 'B' = teamA.includes(e.playerId) ? 'A' : 'B';
     if (mode === 'landing') {
       if (!e.toZone) return;
-      if (teamA.includes(e.playerId))      countB.set(e.toZone, (countB.get(e.toZone) ?? 0) + 1);
-      else if (teamB.includes(e.playerId)) countA.set(e.toZone, (countA.get(e.toZone) ?? 0) + 1);
+      const zone = toOverheadZone(e.toZone, pt);
+      if (pt === 'A')      countB.set(zone, (countB.get(zone) ?? 0) + 1);
+      else if (pt === 'B') countA.set(zone, (countA.get(zone) ?? 0) + 1);
     } else {
       if (!e.courtZone) return;
-      if (teamA.includes(e.playerId))      countA.set(e.courtZone, (countA.get(e.courtZone) ?? 0) + 1);
-      else if (teamB.includes(e.playerId)) countB.set(e.courtZone, (countB.get(e.courtZone) ?? 0) + 1);
+      const zone = toOverheadZone(e.courtZone, pt);
+      if (pt === 'A')      countA.set(zone, (countA.get(zone) ?? 0) + 1);
+      else if (pt === 'B') countB.set(zone, (countB.get(zone) ?? 0) + 1);
     }
   });
 
@@ -226,10 +289,18 @@ export const CourtHeatmap = ({
 
   const Bbase = HALF_H + NET_H;
 
+  const SIDE = LAT_W + LAT_GAP;
+  const vbL  = SIDE + 12;
+
   return (
-    <svg viewBox={`-12 -18 ${CW + 24} ${FULL_H + 36}`} className="w-full select-none">
+    <svg viewBox={`${-vbL} -18 ${CW + vbL * 2} ${FULL_H + 36}`} className="w-full select-none">
       <rect x={0} y={0}     width={CW} height={HALF_H} fill="#101828" />
       <rect x={0} y={Bbase} width={CW} height={HALF_H} fill="#101828" />
+      {/* lateral backgrounds */}
+      <rect x={-SIDE} y={0}     width={LAT_W} height={HALF_H} fill="#101828" />
+      <rect x={CW + LAT_GAP} y={0}     width={LAT_W} height={HALF_H} fill="#101828" />
+      <rect x={-SIDE} y={Bbase} width={LAT_W} height={HALF_H} fill="#101828" />
+      <rect x={CW + LAT_GAP} y={Bbase} width={LAT_W} height={HALF_H} fill="#101828" />
 
       <text x={CW / 2} y={-6} textAnchor="middle" fontSize={7.5} fill="rgba(255,255,255,0.45)"
         fontFamily="system-ui" letterSpacing={1} fontWeight="600">{teamALabel.toUpperCase()}</text>
@@ -286,8 +357,9 @@ const courtLines = (offsetY = 0, mirror = false) => {
   );
 };
 
+
 export const CourtTrajectoryFocus = ({
-  from, to, team, count,
+  from, to, team, count, shotType,
   teamALabel = 'Equipo A',
   teamBLabel = 'Equipo B',
 }: {
@@ -295,12 +367,13 @@ export const CourtTrajectoryFocus = ({
   to: CourtZone;
   team: 'A' | 'B';
   count: number;
+  shotType?: string;
   teamALabel?: string;
   teamBLabel?: string;
 }) => {
-  const oppTeam = team === 'A' ? 'B' : 'A';
-  const fb      = fullBounds(from, team);
-  const tb      = fullBounds(to, oppTeam);
+  const oppTeam  = team === 'A' ? 'B' : 'A';
+  const fb       = fullBounds(from, team);
+  const tb       = fullBounds(to, oppTeam);
   const Bbase   = HALF_H + NET_H;
 
   const x1 = fb.x + fb.w / 2;
@@ -310,10 +383,23 @@ export const CourtTrajectoryFocus = ({
   const mx = (x1 + x2) / 2;
   const my = HALF_H + NET_H / 2;
 
+  // x3: ball hits the back wall at horizontal center, then curves to destination
+  const isX3  = shotType === 'x3' || shotType === 'smash';
+  const wallX = CW / 2 + (x2 - CW / 2) * 0.35;
+  const wallY = team === 'A' ? FULL_H : 0;
+
+  const SIDE = LAT_W + LAT_GAP;
+  const vbL  = SIDE + 12;
+
   return (
-    <svg viewBox={`-12 -18 ${CW + 24} ${FULL_H + 36}`} className="w-full select-none">
+    <svg viewBox={`${-vbL} -18 ${CW + vbL * 2} ${FULL_H + 36}`} className="w-full select-none">
       <rect x={0} y={0}     width={CW} height={HALF_H} fill="#060c12" />
       <rect x={0} y={Bbase} width={CW} height={HALF_H} fill="#060c12" />
+      {/* lateral backgrounds */}
+      <rect x={-SIDE} y={0}     width={LAT_W} height={HALF_H} fill="#060c12" />
+      <rect x={CW + LAT_GAP} y={0}     width={LAT_W} height={HALF_H} fill="#060c12" />
+      <rect x={-SIDE} y={Bbase} width={LAT_W} height={HALF_H} fill="#060c12" />
+      <rect x={CW + LAT_GAP} y={Bbase} width={LAT_W} height={HALF_H} fill="#060c12" />
 
       {COURT_ZONES.flatMap((zone) => (['A', 'B'] as const).map((t) => {
         const b = fullBounds(zone, t);
@@ -338,11 +424,32 @@ export const CourtTrajectoryFocus = ({
         <marker id="trajArrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
           <path d="M0,0 L6,3 L0,6 Z" fill="rgba(255,255,255,0.55)" />
         </marker>
+        <marker id="trajArrowWall" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" fill="rgba(251,191,36,0.85)" />
+        </marker>
       </defs>
-      <path d={`M${x1},${y1} Q${mx},${my} ${x2},${y2}`}
-        fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth={2}
-        strokeLinecap="round" strokeDasharray="5 3"
-        markerEnd="url(#trajArrow)" />
+
+      {isX3 ? (
+        <>
+          {/* leg 1: origin → back wall */}
+          <line x1={x1} y1={y1} x2={wallX} y2={wallY}
+            stroke="rgba(255,255,255,0.5)" strokeWidth={2}
+            strokeLinecap="round" markerEnd="url(#trajArrow)" />
+          {/* wall bounce indicator */}
+          <circle cx={wallX} cy={wallY} r={4} fill="#fbbf24" opacity={0.9} />
+          <circle cx={wallX} cy={wallY} r={7} fill="none" stroke="#fbbf24" strokeWidth={1} opacity={0.5} />
+          {/* leg 2: back wall → destination (curved) */}
+          <path d={`M${wallX},${wallY} Q${x2},${wallY} ${x2},${y2}`}
+            fill="none" stroke="rgba(251,191,36,0.75)" strokeWidth={2}
+            strokeLinecap="round" strokeDasharray="5 3"
+            markerEnd="url(#trajArrowWall)" />
+        </>
+      ) : (
+        <path d={`M${x1},${y1} Q${mx},${my} ${x2},${y2}`}
+          fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth={2}
+          strokeLinecap="round" strokeDasharray="5 3"
+          markerEnd="url(#trajArrow)" />
+      )}
 
       <rect x={CW / 2 - 18} y={HALF_H + 3} width={36} height={10} fill="#1f2937" rx={4} />
       <text x={CW / 2} y={HALF_H + 9} textAnchor="middle" dominantBaseline="middle"

@@ -10,5 +10,5 @@ export const Badge = ({ children, color = 'slate' }: PropsWithChildren<{ color?:
     blue: 'border border-sky-700 bg-sky-950 text-sky-300'
   }[color];
 
-  return <span className={clsx('rounded-full px-2 py-1 text-xs font-medium', colorClass)}>{children}</span>;
+  return <span className={clsx('rounded-full px-2.5 py-1 text-sm font-medium', colorClass)}>{children}</span>;
 };
